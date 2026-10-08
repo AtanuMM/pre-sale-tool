@@ -66,5 +66,5 @@ def rollback_storage_keys(storage_keys: Sequence[str]) -> None:
     for key in storage_keys:
         try:
             delete_file(key)
-        except Exception:
-            logger.warning("Failed to rollback storage object", exc_info=True)
+        except Exception:  # noqa: BLE001 — best-effort per key; never abort the batch
+            logger.warning("Failed to rollback storage object: %s", key)

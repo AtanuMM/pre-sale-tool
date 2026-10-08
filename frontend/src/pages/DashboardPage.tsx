@@ -155,7 +155,7 @@ export function DashboardPage() {
         <CardHeader>
           <CardTitle className="text-base font-semibold">Workflow</CardTitle>
           <CardDescription>
-            End-to-end delivery pipeline for each project (coming soon).
+            Eight-step delivery pipeline; scope analysis is live on each project workflow tab.
           </CardDescription>
         </CardHeader>
         <CardContent>

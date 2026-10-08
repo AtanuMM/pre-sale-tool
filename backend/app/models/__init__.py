@@ -8,9 +8,11 @@ from app.models.auth import (
 )
 from app.models.files import File
 from app.models.projects import Project, ProjectInput, ProjectInputFile
+from app.models.steps import Approval, StepVersion, StepVersionDependency
 from app.models.system import AuditLog, Setting
 
 __all__ = [
+    "Approval",
     "AuditLog",
     "File",
     "Permission",
@@ -21,6 +23,8 @@ __all__ = [
     "Role",
     "RolePermission",
     "Setting",
+    "StepVersion",
+    "StepVersionDependency",
     "User",
     "UserRole",
 ]

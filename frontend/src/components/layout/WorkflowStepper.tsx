@@ -11,7 +11,13 @@ const WORKFLOW_STEPS = [
   'FRS',
 ] as const
 
-export function WorkflowStepper() {
+type WorkflowStepperProps = {
+  footnote?: string
+}
+
+export function WorkflowStepper({
+  footnote = 'Project workflow steps will appear here once project workspaces are available.',
+}: WorkflowStepperProps) {
   return (
     <div className="w-full">
       <ol className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:gap-2">
@@ -40,9 +46,7 @@ export function WorkflowStepper() {
           </li>
         ))}
       </ol>
-      <p className="mt-4 text-xs text-muted-foreground">
-        Project workflow steps will appear here once project workspaces are available.
-      </p>
+      <p className="mt-4 text-xs text-muted-foreground">{footnote}</p>
     </div>
   )
 }

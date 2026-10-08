@@ -1,5 +1,9 @@
+name: scopedesk
+
 services:
   postgres:
+    profiles:
+      - full-stack
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: scopedesk
@@ -16,17 +20,24 @@ services:
       retries: 5
 
   minio:
-    image: minio/minio:latest
+    image: cgr.dev/chainguard/minio@sha256:59667194421209c2c1eacbe761e24787e047985c5dfa96b15da9b59fe9b55cd0
     command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?set MINIO_ROOT_USER in repo root .env}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD in repo root .env}
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "9100:9000"
+      - "9101:9001"
     volumes:
-      - minio_data:/data
+      - scopedesk_minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
 
 volumes:
   postgres_data:
-  minio_data:
+  scopedesk_minio_data:

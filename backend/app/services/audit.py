@@ -44,6 +44,8 @@ class AuditAction:
     TEMPLATE_ACTIVATED = "template.activated"
     SETTINGS_CHANGED = "settings.changed"
     PROJECT_SETTINGS_CHANGED = "project.settings_changed"
+    PROJECT_ARCHIVED = "project.archived"
+    PROJECT_RESTORED = "project.restored"
     AUDIT_EXPORTED = "audit.exported"
 
 

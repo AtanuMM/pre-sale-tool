@@ -14,8 +14,11 @@ from botocore.config import Config
 from botocore.exceptions import BotoCoreError, ClientError
 
 from app.config import Settings, get_settings
+from app.services.file_validation import FileTooLargeError
 
 logger = logging.getLogger(__name__)
+
+STORAGE_UNAVAILABLE_DETAIL = "Storage temporarily unavailable"
 
 
 class StorageError(Exception):
@@ -91,7 +94,7 @@ def read_bounded_stream(
             break
         size += len(chunk)
         if size > max_bytes:
-            raise StorageError(f"File exceeds maximum size of {max_bytes} bytes")
+            raise FileTooLargeError(f"File exceeds maximum size of {max_bytes} bytes")
         hasher.update(chunk)
         chunks.append(chunk)
     data = b"".join(chunks)

@@ -50,6 +50,7 @@ def test_success_path(mock_generate_content: MagicMock) -> None:
 
     with patch("app.llm.gemini.get_settings") as settings:
         settings.return_value.GEMINI_MODEL = "test-model"
+        settings.return_value.GENERATION_TIMEOUT_SECONDS = 300.0
         result = generate_structured("prompt", SampleSchema)
 
     assert result.answer == "ok"
@@ -67,6 +68,7 @@ def test_429_then_success(mock_generate_content: MagicMock) -> None:
         patch("app.llm.gemini.time.sleep") as sleep,
     ):
         settings.return_value.GEMINI_MODEL = "test-model"
+        settings.return_value.GENERATION_TIMEOUT_SECONDS = 300.0
         result = generate_structured("prompt", SampleSchema)
 
     assert result.answer == "ok"
@@ -85,6 +87,7 @@ def test_repeated_429_raises_rate_limit_error(mock_generate_content: MagicMock) 
         pytest.raises(LLMRateLimitError),
     ):
         settings.return_value.GEMINI_MODEL = "test-model"
+        settings.return_value.GENERATION_TIMEOUT_SECONDS = 300.0
         generate_structured("prompt", SampleSchema)
 
     assert mock_generate_content.call_count == gemini.MAX_API_ATTEMPTS
@@ -98,6 +101,7 @@ def test_validation_failure_then_success(mock_generate_content: MagicMock) -> No
 
     with patch("app.llm.gemini.get_settings") as settings:
         settings.return_value.GEMINI_MODEL = "test-model"
+        settings.return_value.GENERATION_TIMEOUT_SECONDS = 300.0
         result = generate_structured("prompt", SampleSchema)
 
     assert result.answer == "fixed"
@@ -112,6 +116,7 @@ def test_validation_failure_exhausted(mock_generate_content: MagicMock) -> None:
         pytest.raises(LLMValidationError),
     ):
         settings.return_value.GEMINI_MODEL = "test-model"
+        settings.return_value.GENERATION_TIMEOUT_SECONDS = 300.0
         generate_structured("prompt", SampleSchema, validation_max_attempts=2)
 
     assert mock_generate_content.call_count == 2
@@ -128,6 +133,7 @@ def test_non_retryable_client_error(mock_generate_content: MagicMock) -> None:
         pytest.raises(LLMError),
     ):
         settings.return_value.GEMINI_MODEL = "test-model"
+        settings.return_value.GENERATION_TIMEOUT_SECONDS = 300.0
         generate_structured("prompt", SampleSchema)
 
     assert mock_generate_content.call_count == 1

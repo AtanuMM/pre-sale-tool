@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import Generic, TypeVar
 
 from google.genai import Client, types
+from google.genai import _transformers as genai_transformers
 from google.genai.errors import ClientError, ServerError
 from pydantic import BaseModel, ValidationError
 
@@ -19,12 +20,12 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T", bound=BaseModel)
 
 MAX_API_ATTEMPTS = 5
-MAX_API_WAIT_SECONDS = 60.0
 BASE_DELAY_SECONDS = 1.0
 MAX_DELAY_SECONDS = 30.0
 JITTER_SECONDS = 0.5
 
 _client: Client | None = None
+_client_timeout_ms: int | None = None
 
 
 class LLMError(Exception):
@@ -45,20 +46,42 @@ class StructuredGenerationResult(Generic[T]):
     model_id: str
     tokens_in: int | None
     tokens_out: int | None
+    api_attempt_count: int
+
+
+def _http_timeout_ms() -> int:
+    settings = get_settings()
+    per_request = min(
+        120_000,
+        max(5_000, int(settings.GENERATION_TIMEOUT_SECONDS * 1000 / 2)),
+    )
+    return per_request
 
 
 def _get_client() -> Client:
-    global _client
-    if _client is None:
+    global _client, _client_timeout_ms
+    timeout_ms = _http_timeout_ms()
+    if _client is None or _client_timeout_ms != timeout_ms:
         settings = get_settings()
-        _client = Client(api_key=settings.GEMINI_API_KEY)
+        _client = Client(
+            api_key=settings.GEMINI_API_KEY,
+            http_options=types.HttpOptions(timeout=timeout_ms),
+        )
+        _client_timeout_ms = timeout_ms
     return _client
 
 
 def reset_client_for_tests() -> None:
     """Clear cached client (tests only)."""
-    global _client
+    global _client, _client_timeout_ms
     _client = None
+    _client_timeout_ms = None
+
+
+def _remaining_seconds(deadline: float | None) -> float | None:
+    if deadline is None:
+        return None
+    return max(0.0, deadline - time.monotonic())
 
 
 def _parse_retry_after_seconds(exc: ClientError | ServerError) -> float | None:
@@ -78,7 +101,7 @@ def _parse_retry_after_seconds(exc: ClientError | ServerError) -> float | None:
 
 
 def _compute_backoff_seconds(
-    attempt: int, exc: ClientError | ServerError
+    attempt: int, exc: ClientError | ServerError, *, cap: float | None
 ) -> float:
     retry_after = _parse_retry_after_seconds(exc)
     if retry_after is not None:
@@ -86,7 +109,10 @@ def _compute_backoff_seconds(
     else:
         delay = min(MAX_DELAY_SECONDS, BASE_DELAY_SECONDS * (2**attempt))
     delay += random.uniform(0.0, JITTER_SECONDS)
-    return min(delay, MAX_DELAY_SECONDS)
+    delay = min(delay, MAX_DELAY_SECONDS)
+    if cap is not None:
+        delay = min(delay, cap)
+    return delay
 
 
 def _is_retryable_api_error(exc: Exception) -> bool:
@@ -123,14 +149,16 @@ def _generate_content_once(
     schema: type[T],
     system: str | None,
 ) -> types.GenerateContentResponse:
+    client = _get_client()
     config_kwargs: dict[str, object] = {
         "response_mime_type": "application/json",
-        "response_schema": schema,
     }
+    json_schema = schema.model_json_schema()
+    genai_transformers.process_schema(json_schema, client._api_client)
+    config_kwargs["response_json_schema"] = json_schema
     if system is not None:
         config_kwargs["system_instruction"] = system
     config = types.GenerateContentConfig(**config_kwargs)
-    client = _get_client()
     return client.models.generate_content(
         model=model_id,
         contents=prompt,
@@ -144,11 +172,15 @@ def _call_with_api_retries(
     prompt: str,
     schema: type[T],
     system: str | None,
+    deadline: float | None,
 ) -> types.GenerateContentResponse:
     total_wait = 0.0
     last_retryable: ClientError | ServerError | None = None
 
     for attempt in range(MAX_API_ATTEMPTS):
+        remaining = _remaining_seconds(deadline)
+        if deadline is not None and remaining is not None and remaining <= 0:
+            raise LLMError("generation timeout exceeded")
         try:
             return _generate_content_once(
                 model_id=model_id,
@@ -169,8 +201,10 @@ def _call_with_api_retries(
             last_retryable = exc
             if attempt + 1 >= MAX_API_ATTEMPTS:
                 break
-            delay = _compute_backoff_seconds(attempt, exc)
-            if total_wait + delay > MAX_API_WAIT_SECONDS:
+            delay = _compute_backoff_seconds(
+                attempt, exc, cap=_remaining_seconds(deadline)
+            )
+            if deadline is not None and total_wait + delay > (_remaining_seconds(deadline) or 0):
                 break
             logger.info(
                 "Gemini retryable error code=%s attempt=%s sleep=%.2fs",
@@ -194,24 +228,40 @@ def _validate_response_text(text: str | None, schema: type[T]) -> T:
     return schema.model_validate_json(text)
 
 
+def _sum_tokens(current: int | None, added: int | None) -> int | None:
+    if added is None:
+        return current
+    if current is None:
+        return added
+    return current + added
+
+
 def generate_structured_result(
     prompt: str,
     schema: type[T],
     *,
     system: str | None = None,
     validation_max_attempts: int = 2,
+    deadline: float | None = None,
 ) -> StructuredGenerationResult[T]:
     if validation_max_attempts < 1:
         raise ValueError("validation_max_attempts must be at least 1")
 
     settings = get_settings()
+    if deadline is None:
+        timeout_secs = float(getattr(settings, "GENERATION_TIMEOUT_SECONDS", 300.0))
+        deadline = time.monotonic() + timeout_secs
+
     model_id = settings.GEMINI_MODEL
     current_prompt = prompt
     last_validation_error: ValidationError | None = None
     tokens_in: int | None = None
     tokens_out: int | None = None
+    result_model_id = model_id
 
     for validation_attempt in range(validation_max_attempts):
+        if _remaining_seconds(deadline) is not None and _remaining_seconds(deadline) <= 0:
+            raise LLMError("generation timeout exceeded")
         logger.info(
             "Structured generation attempt %s/%s model=%s prompt_chars=%s",
             validation_attempt + 1,
@@ -224,18 +274,23 @@ def generate_structured_result(
             prompt=current_prompt,
             schema=schema,
             system=system,
+            deadline=deadline,
         )
         in_count, out_count = _extract_usage(response)
-        tokens_in = in_count if in_count is not None else tokens_in
-        tokens_out = out_count if out_count is not None else tokens_out
+        tokens_in = _sum_tokens(tokens_in, in_count)
+        tokens_out = _sum_tokens(tokens_out, out_count)
+        reported = getattr(response, "model_version", None)
+        if isinstance(reported, str) and reported.strip():
+            result_model_id = reported.strip()
 
         try:
             validated = _validate_response_text(response.text, schema)
             return StructuredGenerationResult(
                 data=validated,
-                model_id=model_id,
+                model_id=result_model_id,
                 tokens_in=tokens_in,
                 tokens_out=tokens_out,
+                api_attempt_count=validation_attempt + 1,
             )
         except ValidationError as exc:
             last_validation_error = exc
@@ -265,10 +320,12 @@ def generate_structured(
     *,
     system: str | None = None,
     validation_max_attempts: int = 2,
+    deadline: float | None = None,
 ) -> T:
     return generate_structured_result(
         prompt,
         schema,
         system=system,
         validation_max_attempts=validation_max_attempts,
+        deadline=deadline,
     ).data

@@ -29,6 +29,8 @@ class Settings(BaseSettings):
     S3_PATH_STYLE: bool = True
     MAX_UPLOAD_FILE_BYTES: int = 10_485_760
     MAX_FILES_PER_INPUT: int = 10
+    RECEIVED_AT_FUTURE_TOLERANCE_SECONDS: int = 300
+    MAX_INTAKE_REQUEST_BYTES: int = 10_485_760 * 10 + 1_048_576
     MAX_EXTRACTED_TEXT_CHARS: int = 500_000
     ZIP_MAX_UNCOMPRESSED_BYTES: int = 50_000_000
     ZIP_MAX_ENTRY_COUNT: int = 500
@@ -40,6 +42,16 @@ class Settings(BaseSettings):
     ADMIN_PASSWORD: str
     ADMIN_FULL_NAME: str
     ALLOWED_ORIGINS: Annotated[list[str], NoDecode]
+    GENERATION_TIMEOUT_SECONDS: float = 300.0
+    GENERATION_RECOVERY_MARGIN_SECONDS: float = 60.0
+    MAX_CONCURRENT_GENERATIONS: int = 2
+    MAX_PROMPT_CHARS: int = 300_000
+    SOFT_CAP_AMBIGUITIES: int = 25
+    SOFT_CAP_DEPENDENCIES: int = 20
+    SOFT_CAP_ASSUMPTIONS: int = 20
+    SOFT_CAP_GAPS: int = 40
+    SOFT_CAP_GAP_CLIENT_QUESTIONS: int = 30
+    MAX_DOCX_EXPORT_CONTENT_CHARS: int = 1_000_000
 
     @field_validator("ALLOWED_ORIGINS", mode="before")
     @classmethod

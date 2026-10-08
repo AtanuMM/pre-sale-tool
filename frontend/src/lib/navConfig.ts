@@ -1,4 +1,5 @@
 import {
+  PERMISSION_PROJECT_VIEW,
   PERMISSION_ROLE_MANAGE,
   PERMISSION_SETTINGS_MANAGE,
   PERMISSION_USER_MANAGE,
@@ -27,7 +28,12 @@ export const NAV_GROUPS: NavGroup[] = [
     label: 'Workspace',
     items: [
       { type: 'link', label: 'Dashboard', to: '/' },
-      { type: 'disabled', label: 'Projects', badge: 'Soon' },
+      {
+        type: 'link',
+        label: 'Projects',
+        to: '/projects',
+        permission: PERMISSION_PROJECT_VIEW,
+      },
     ],
   },
   {
@@ -47,6 +53,8 @@ export const NAV_GROUPS: NavGroup[] = [
 
 export const ROUTE_TITLES: Record<string, string> = {
   '/': 'Dashboard',
+  '/projects': 'Projects',
+  '/projects/new': 'New project',
   '/admin/users': 'Users',
   '/admin/roles': 'Roles',
   '/admin/settings': 'Settings',

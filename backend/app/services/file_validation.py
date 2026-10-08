@@ -27,6 +27,10 @@ class FileValidationError(Exception):
     """Uploaded file failed content or policy validation."""
 
 
+class FileTooLargeError(Exception):
+    """Uploaded file exceeds configured size limit."""
+
+
 MIME_BY_TYPE: dict[DetectedFileType, str] = {
     DetectedFileType.PDF: "application/pdf",
     DetectedFileType.DOCX: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -114,19 +118,25 @@ def _is_text_like(data: bytes) -> bool:
             return False
 
 
+_UPLOAD_EXTENSION_MAP: dict[str, DetectedFileType] = {
+    "pdf": DetectedFileType.PDF,
+    "docx": DetectedFileType.DOCX,
+    "txt": DetectedFileType.TXT,
+    "md": DetectedFileType.MD,
+    "markdown": DetectedFileType.MD,
+    "eml": DetectedFileType.EML,
+    "csv": DetectedFileType.CSV,
+    "xlsx": DetectedFileType.XLSX,
+}
+
+ALLOWED_UPLOAD_EXTENSIONS: tuple[str, ...] = tuple(
+    sorted({ext for ext in _UPLOAD_EXTENSION_MAP if ext != "markdown"})
+)
+
+
 def _extension_hint(name: str) -> DetectedFileType | None:
     ext = PurePath(name).suffix.lower().lstrip(".")
-    mapping = {
-        "pdf": DetectedFileType.PDF,
-        "docx": DetectedFileType.DOCX,
-        "txt": DetectedFileType.TXT,
-        "md": DetectedFileType.MD,
-        "markdown": DetectedFileType.MD,
-        "eml": DetectedFileType.EML,
-        "csv": DetectedFileType.CSV,
-        "xlsx": DetectedFileType.XLSX,
-    }
-    return mapping.get(ext)
+    return _UPLOAD_EXTENSION_MAP.get(ext)
 
 
 def detect_file_type(content: bytes, *, sanitized_name: str) -> DetectedFileType:
@@ -167,7 +177,7 @@ def validate_upload(
 ) -> DetectedFileType:
     settings = get_settings()
     if len(content) > settings.MAX_UPLOAD_FILE_BYTES:
-        raise FileValidationError(
+        raise FileTooLargeError(
             f"File exceeds maximum size of {settings.MAX_UPLOAD_FILE_BYTES} bytes"
         )
     sanitized = sanitize_original_name(original_name)

@@ -8,6 +8,16 @@ import {
 export const PERMISSION_USER_MANAGE = 'user.manage'
 export const PERMISSION_ROLE_MANAGE = 'role.manage'
 export const PERMISSION_SETTINGS_MANAGE = 'settings.manage'
+export const PERMISSION_PROJECT_VIEW = 'project.view'
+export const PERMISSION_PROJECT_CREATE = 'project.create'
+export const PERMISSION_PROJECT_ARCHIVE = 'project.archive'
+export const PERMISSION_INPUT_ADD = 'input.add'
+
+export const PERMISSION_STEP_GENERATE = 'step.generate'
+export const PERMISSION_STEP_REQUEST_CHANGES = 'step.request_changes'
+export const PERMISSION_STEP_APPROVE = 'step.approve'
+export const PERMISSION_PROMPT_VIEW = 'prompt.view'
+export const PERMISSION_DOCUMENT_DOWNLOAD = 'document.download'
 
 export const ADMIN_ROLE_NAME = 'Admin'
 

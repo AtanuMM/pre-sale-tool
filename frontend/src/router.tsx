@@ -12,7 +12,12 @@ import { GuestRoute } from '@/routes/GuestRoute'
 import { ProtectedRoute } from '@/routes/ProtectedRoute'
 import { RequirePermission } from '@/routes/RequirePermission'
 import { Root } from '@/routes/Root'
+import { NewProjectPage } from '@/pages/projects/NewProjectPage'
+import { ProjectDetailPage } from '@/pages/projects/ProjectDetailPage'
+import { ProjectsListPage } from '@/pages/projects/ProjectsListPage'
 import {
+  PERMISSION_PROJECT_CREATE,
+  PERMISSION_PROJECT_VIEW,
   PERMISSION_ROLE_MANAGE,
   PERMISSION_SETTINGS_MANAGE,
   PERMISSION_USER_MANAGE,
@@ -33,6 +38,19 @@ export const router = createBrowserRouter([
             element: <AppLayout />,
             children: [
               { index: true, element: <DashboardPage /> },
+              {
+                path: 'projects',
+                element: <RequirePermission permission={PERMISSION_PROJECT_VIEW} />,
+                children: [
+                  { index: true, element: <ProjectsListPage /> },
+                  {
+                    path: 'new',
+                    element: <RequirePermission permission={PERMISSION_PROJECT_CREATE} />,
+                    children: [{ index: true, element: <NewProjectPage /> }],
+                  },
+                  { path: ':projectId', element: <ProjectDetailPage /> },
+                ],
+              },
               { path: '403', element: <ForbiddenPage /> },
               {
                 path: 'admin/users',

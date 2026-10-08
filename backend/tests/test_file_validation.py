@@ -7,12 +7,13 @@ import pytest
 from app.config import get_settings
 from app.services.file_validation import (
     DetectedFileType,
+    FileTooLargeError,
     FileValidationError,
     assert_file_count_for_input,
     sanitize_original_name,
     validate_upload,
 )
-from app.services.storage import StorageError, read_bounded_stream
+from app.services.storage import read_bounded_stream
 from tests.fixtures.file_samples import (
     fake_pdf_exe,
     sample_csv,
@@ -61,7 +62,7 @@ def test_oversize_rejected_while_streaming() -> None:
     get_settings.cache_clear()
     settings = get_settings()
     stream = BytesIO(b"x" * (settings.MAX_UPLOAD_FILE_BYTES + 1))
-    with pytest.raises(StorageError):
+    with pytest.raises(FileTooLargeError):
         read_bounded_stream(stream, max_bytes=settings.MAX_UPLOAD_FILE_BYTES)
 
 

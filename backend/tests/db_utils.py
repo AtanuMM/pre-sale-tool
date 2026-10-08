@@ -52,13 +52,20 @@ def reset_rbac_test_data(connection: Connection) -> None:
     connection.execute(text("ALTER TABLE audit_log DISABLE TRIGGER ALL"))
     connection.execute(text("ALTER TABLE project_inputs DISABLE TRIGGER ALL"))
     connection.execute(text("ALTER TABLE files DISABLE TRIGGER ALL"))
+    connection.execute(text("ALTER TABLE approvals DISABLE TRIGGER ALL"))
+    connection.execute(text("ALTER TABLE step_version_dependencies DISABLE TRIGGER ALL"))
+    connection.execute(text("ALTER TABLE step_versions DISABLE TRIGGER ALL"))
     connection.execute(
         text(
-            "TRUNCATE project_input_files, project_inputs, files, projects, "
+            "TRUNCATE approvals, step_version_dependencies, step_versions, "
+            "project_input_files, project_inputs, files, projects, "
             "refresh_tokens, role_permissions, user_roles, settings, "
             "audit_log, users, permissions, roles RESTART IDENTITY CASCADE"
         )
     )
+    connection.execute(text("ALTER TABLE step_versions ENABLE TRIGGER ALL"))
+    connection.execute(text("ALTER TABLE step_version_dependencies ENABLE TRIGGER ALL"))
+    connection.execute(text("ALTER TABLE approvals ENABLE TRIGGER ALL"))
     connection.execute(text("ALTER TABLE files ENABLE TRIGGER ALL"))
     connection.execute(text("ALTER TABLE project_inputs ENABLE TRIGGER ALL"))
     connection.execute(text("ALTER TABLE audit_log ENABLE TRIGGER ALL"))
@@ -78,4 +85,7 @@ def expected_tables() -> set[str]:
         "project_inputs",
         "files",
         "project_input_files",
+        "step_versions",
+        "step_version_dependencies",
+        "approvals",
     }

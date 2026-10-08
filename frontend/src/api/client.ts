@@ -80,6 +80,15 @@ async function rawFetch(
   })
 }
 
+export async function refreshSessionSingleFlight(): Promise<LoginResponse | null> {
+  if (!refreshInFlight) {
+    refreshInFlight = performRefresh().finally(() => {
+      refreshInFlight = null
+    })
+  }
+  return refreshInFlight
+}
+
 async function performRefresh(): Promise<LoginResponse | null> {
   const response = await rawFetch('/auth/refresh', { method: 'POST' }, null)
   if (!response.ok) {
@@ -90,15 +99,6 @@ async function performRefresh(): Promise<LoginResponse | null> {
   const data = await parseJsonResponse<LoginResponse>(response)
   setAccessToken(data.access_token)
   return data
-}
-
-function refreshSessionSingleFlight(): Promise<LoginResponse | null> {
-  if (!refreshInFlight) {
-    refreshInFlight = performRefresh().finally(() => {
-      refreshInFlight = null
-    })
-  }
-  return refreshInFlight
 }
 
 export async function apiRequest<T>(
