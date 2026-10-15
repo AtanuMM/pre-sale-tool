@@ -244,8 +244,26 @@ def test_markers_in_review_and_approved(
     header2 = doc2.sections[0].header.paragraphs[0].text
     assert "DRAFT" not in header2
     assert "Approved by" in header2
-    assert "Self-approved" in header2
+    assert "Self-approved" not in header2
     assert "-DRAFT" not in final.headers["content-disposition"]
+
+
+def test_approved_marker_omits_self_approved() -> None:
+    from datetime import UTC, datetime
+
+    from app.documents.meta import ApprovalMarker, build_marker_line
+
+    line = build_marker_line(
+        status="approved",
+        approval=ApprovalMarker(
+            approved_by_name="Ada",
+            approved_at=datetime(2026, 1, 2, tzinfo=UTC),
+            self_approved=True,
+        ),
+        fallback_approved_at=None,
+    )
+    assert line == "Approved by Ada on 2 January 2026"
+    assert "Self-approved" not in line
 
 
 def test_marker_lines_superseded_and_stale_in_docx() -> None:

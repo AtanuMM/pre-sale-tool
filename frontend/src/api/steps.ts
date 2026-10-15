@@ -1,4 +1,8 @@
-import type { StepContextStep, StepLayoutSection } from '@/lib/stepLayoutTypes'
+import type {
+  StepContextStep,
+  StepInputField,
+  StepLayoutSection,
+} from '@/lib/stepLayoutTypes'
 
 import { apiFetchBlob } from './download'
 import { apiRequest } from './client'
@@ -33,6 +37,9 @@ export type StepVersionSummary = {
   tokens_in: number | null
   tokens_out: number | null
   error: string | null
+  failure_code?: string | null
+  failure_detail?: string | null
+  generation_progress?: { done: number; total: number } | null
 }
 
 export type ApprovalInfo = {
@@ -60,6 +67,10 @@ export type ProjectStep = {
   reads_description: string
   writes_description: string
   context_steps: StepContextStep[]
+  input_fields: StepInputField[]
+  export_formats?: string[]
+  generation_progress?: { done: number; total: number } | null
+  supports_reassemble?: boolean
 }
 
 export type ProjectStepsResponse = {
@@ -87,6 +98,7 @@ export type StepVersionDetail = {
   generation_started_at: string | null
   generation_finished_at: string | null
   approval: ApprovalInfo | null
+  layout?: StepLayoutSection[] | null
 }
 
 export type StepVersionPromptResponse = {
@@ -101,10 +113,18 @@ export function getProjectSteps(projectId: string): Promise<ProjectStepsResponse
 export function generateStep(
   projectId: string,
   stepKey: string,
+  inputs?: Record<string, unknown>,
 ): Promise<{ version: StepVersionSummary }> {
+  const hasInputs = inputs != null && Object.keys(inputs).length > 0
   return apiRequest<{ version: StepVersionSummary }>(
     `/projects/${projectId}/steps/${stepKey}/generate`,
-    { method: 'POST' },
+    hasInputs
+      ? {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ inputs }),
+        }
+      : { method: 'POST' },
   )
 }
 
@@ -129,14 +149,20 @@ export function getStepVersionPrompt(
 
 export function requestStepChanges(
   versionId: string,
-  instructions: string,
+  instructions: string | null,
+  inputs?: Record<string, unknown>,
+  parts?: string[],
 ): Promise<{ version: StepVersionSummary }> {
+  const body: Record<string, unknown> = {}
+  if (instructions != null && instructions.trim()) body.instructions = instructions.trim()
+  if (inputs != null) body.inputs = inputs
+  if (parts != null && parts.length > 0) body.parts = parts
   return apiRequest<{ version: StepVersionSummary }>(
     `/step-versions/${versionId}/request-changes`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ instructions }),
+      body: JSON.stringify(body),
     },
   )
 }
@@ -156,12 +182,20 @@ export function anyStepGenerating(steps: ProjectStep[] | undefined): boolean {
   return steps?.some((s) => s.status === 'generating') ?? false
 }
 
+export function downloadStepVersion(
+  versionId: string,
+  format: string,
+  fallbackFilename: string,
+): Promise<{ blob: Blob; filename: string }> {
+  return apiFetchBlob(
+    `/step-versions/${versionId}/download?format=${encodeURIComponent(format)}`,
+    fallbackFilename,
+  )
+}
+
 export function downloadStepVersionDocx(
   versionId: string,
   fallbackFilename: string,
 ): Promise<{ blob: Blob; filename: string }> {
-  return apiFetchBlob(
-    `/step-versions/${versionId}/download?format=docx`,
-    fallbackFilename,
-  )
+  return downloadStepVersion(versionId, 'docx', fallbackFilename)
 }

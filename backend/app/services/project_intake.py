@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import logging
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Literal
 
 from fastapi import HTTPException, UploadFile, status
-from sqlalchemy import func, or_, select
+from sqlalchemy import delete, func, or_, select, text, update
 from sqlalchemy.orm import Session, selectinload
 
 from app.config import get_settings
@@ -19,6 +20,7 @@ from app.models.projects import (
     ProjectInput,
     ProjectInputFile,
 )
+from app.models.steps import Approval, StepVersion, StepVersionDependency
 from app.models.system import AuditLog
 from app.schemas.projects import (
     ExtractionStatus,
@@ -50,6 +52,8 @@ from app.services.file_validation import (
 from app.services.settings_admin import get_settings_out
 
 InputKind = Literal["email", "document", "meeting_notes", "other"]
+
+logger = logging.getLogger(__name__)
 
 
 class IntakeValidationError(Exception):
@@ -614,6 +618,80 @@ def restore_project(
     session.commit()
     session.refresh(project)
     return project_to_summary(session, project)
+
+
+def delete_project(
+    session: Session,
+    *,
+    project_id: uuid.UUID,
+    actor: User,
+    audit_ip: str | None,
+    audit_ua: str | None,
+) -> None:
+    project = session.get(Project, project_id)
+    if project is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+
+    input_ids = list(
+        session.scalars(select(ProjectInput.id).where(ProjectInput.project_id == project_id))
+    )
+    file_ids: list[uuid.UUID] = []
+    if input_ids:
+        file_ids = list(
+            session.scalars(
+                select(ProjectInputFile.file_id).where(ProjectInputFile.input_id.in_(input_ids))
+            )
+        )
+    storage_keys: list[str] = []
+    if file_ids:
+        storage_keys = list(
+            session.scalars(select(File.storage_key).where(File.id.in_(file_ids)))
+        )
+    version_ids = list(
+        session.scalars(select(StepVersion.id).where(StepVersion.project_id == project_id))
+    )
+
+    session.execute(text("SET LOCAL session_replication_role = 'replica'"))
+    if version_ids:
+        session.execute(
+            delete(StepVersionDependency).where(
+                or_(
+                    StepVersionDependency.step_version_id.in_(version_ids),
+                    StepVersionDependency.depends_on_version_id.in_(version_ids),
+                )
+            )
+        )
+        session.execute(delete(Approval).where(Approval.step_version_id.in_(version_ids)))
+        session.execute(
+            update(StepVersion)
+            .where(StepVersion.id.in_(version_ids))
+            .values(based_on_version_id=None)
+        )
+        session.execute(delete(StepVersion).where(StepVersion.project_id == project_id))
+    if input_ids:
+        session.execute(delete(ProjectInputFile).where(ProjectInputFile.input_id.in_(input_ids)))
+    if file_ids:
+        session.execute(delete(File).where(File.id.in_(file_ids)))
+    session.execute(delete(ProjectInput).where(ProjectInput.project_id == project_id))
+    session.execute(
+        update(AuditLog).where(AuditLog.project_id == project_id).values(project_id=None)
+    )
+    session.delete(project)
+    record_audit(
+        session,
+        action=AuditAction.PROJECT_DELETED,
+        actor=actor,
+        entity_type="project",
+        entity_id=project_id,
+        project_id=None,
+        metadata={"project_id": str(project_id)},
+        ip_address=audit_ip,
+        user_agent=audit_ua,
+    )
+    session.commit()
+    logger.info("Deleted project_id=%s", project_id)
+    if storage_keys:
+        rollback_storage_keys(storage_keys)
 
 
 def intake_validation_to_http(exc: IntakeValidationError) -> HTTPException:

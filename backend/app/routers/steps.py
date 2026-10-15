@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from typing import Annotated, Any, Literal
+from typing import Annotated
 
 from fastapi import (
     APIRouter,
@@ -19,6 +19,7 @@ from app.db import get_db
 from app.models.auth import User
 from app.schemas.steps import (
     GenerateStepAcceptedOut,
+    GenerateStepBody,
     ProjectStepsOut,
     RequestChangesAcceptedOut,
     StepVersionDetailOut,
@@ -39,7 +40,7 @@ from app.services.step_actions import (
     approve_step_version,
     request_step_changes,
 )
-from app.services.step_export import build_step_version_docx
+from app.services.step_export import build_step_version_export
 from app.services.step_generation import request_step_generation, run_generation
 from app.services.step_queries import (
     get_project_steps,
@@ -56,10 +57,6 @@ _request_changes = require_permission("step.request_changes")
 _approve = require_permission("step.approve")
 _prompt_view = require_permission("prompt.view")
 _download = require_permission("document.download")
-
-DOCX_MEDIA_TYPE = (
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-)
 
 
 @router.get("/projects/{project_id}/steps", response_model=ProjectStepsOut)
@@ -85,7 +82,7 @@ def generate_step(
     background_tasks: BackgroundTasks,
     db: Annotated[Session, Depends(get_db)],
     actor: Annotated[User, Depends(_generate)],
-    _body: Annotated[dict[str, Any] | None, Body()] = None,
+    body: Annotated[GenerateStepBody | None, Body()] = None,
 ) -> GenerateStepAcceptedOut:
     summary = request_step_generation(
         db,
@@ -94,6 +91,7 @@ def generate_step(
         actor=actor,
         audit_ip=client_ip_from_request(request),
         audit_ua=user_agent_from_request(request),
+        raw_inputs=body.inputs if body is not None else None,
     )
     background_tasks.add_task(run_generation, summary.id)
     return GenerateStepAcceptedOut(version=summary)
@@ -121,17 +119,80 @@ def get_version(
     return get_step_version_detail(db, version_id)
 
 
+@router.get("/step-versions/{version_id}/diagrams")
+def list_version_diagrams(
+    version_id: uuid.UUID,
+    db: Annotated[Session, Depends(get_db)],
+    _view: Annotated[User, Depends(_view)],
+) -> dict[str, list[dict[str, str]]]:
+    from app.services.srs_diagrams import list_diagrams
+
+    version = get_step_version_for_view(db, version_id)
+    if version.step_key != "srs" or not isinstance(version.content, dict):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Diagrams are only available for SRS versions with content",
+        )
+    return {"diagrams": list_diagrams(version.content)}
+
+
+@router.get("/step-versions/{version_id}/diagrams/{diagram_key}")
+def download_version_diagram(
+    version_id: uuid.UUID,
+    diagram_key: str,
+    format: str,
+    request: Request,
+    db: Annotated[Session, Depends(get_db)],
+    _view: Annotated[User, Depends(_view)],
+    actor: Annotated[User, Depends(_download)],
+):
+    from app.services.srs_diagrams import render_version_diagram
+
+    if format not in ("png", "svg"):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="format must be png or svg",
+        )
+    version = get_step_version_for_view(db, version_id)
+    payload, media_type = render_version_diagram(db, version_id, diagram_key, format)  # type: ignore[arg-type]
+    record_audit(
+        db,
+        action=AuditAction.DOCUMENT_DOWNLOADED,
+        actor=actor,
+        entity_type="step_version",
+        entity_id=version.id,
+        project_id=version.project_id,
+        metadata={
+            "version_id": str(version.id),
+            "step_key": version.step_key,
+            "diagram_key": diagram_key,
+            "format": format,
+        },
+        ip_address=client_ip_from_request(request),
+        user_agent=user_agent_from_request(request),
+    )
+    db.commit()
+    return StreamingResponse(
+        iter([payload]),
+        media_type=media_type,
+        headers={
+            "Content-Disposition": f'attachment; filename="{diagram_key}.{format}"',
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
 @router.get("/step-versions/{version_id}/download")
 def download_step_version(
     version_id: uuid.UUID,
-    format: Literal["docx"],
+    format: str,
     request: Request,
     db: Annotated[Session, Depends(get_db)],
     _view: Annotated[User, Depends(_view)],
     actor: Annotated[User, Depends(_download)],
 ):
     version = get_step_version_for_view(db, version_id)
-    docx_bytes, filename = build_step_version_docx(db, version)
+    payload, filename, media_type = build_step_version_export(db, version, format)
     record_audit(
         db,
         action=AuditAction.DOCUMENT_DOWNLOADED,
@@ -151,8 +212,8 @@ def download_step_version(
     )
     db.commit()
     return StreamingResponse(
-        iter([docx_bytes]),
-        media_type=DOCX_MEDIA_TYPE,
+        iter([payload]),
+        media_type=media_type,
         headers={
             "Content-Disposition": f'attachment; filename="{filename}"',
             "X-Content-Type-Options": "nosniff",

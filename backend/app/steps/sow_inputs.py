@@ -1,0 +1,162 @@
+"""Statement of Work user input field specs."""
+
+from __future__ import annotations
+
+from app.steps.input_fields import InputFieldSpec, TableColumnSpec
+
+PAYMENT_COLUMNS: tuple[TableColumnSpec, ...] = (
+    TableColumnSpec(key="label", label="Label", kind="text", max_length=120),
+    TableColumnSpec(
+        key="percent",
+        label="Percent",
+        kind="number",
+        min_value=0,
+        max_value=100,
+        step=0.01,
+    ),
+    TableColumnSpec(
+        key="trigger",
+        label="Trigger",
+        kind="select",
+        options=("signing", "phase_complete", "custom"),
+        default="signing",
+    ),
+    TableColumnSpec(
+        key="trigger_detail",
+        label="Custom trigger detail",
+        kind="text",
+        required=False,
+        max_length=200,
+        visible_when=("trigger", "custom"),
+    ),
+)
+
+SOW_INPUT_FIELDS: tuple[InputFieldSpec, ...] = (
+    InputFieldSpec(
+        key="client_legal_name",
+        label="Client legal name",
+        help_text="Legal name of the client for the contract cover page.",
+        kind="text",
+        required=True,
+        max_length=200,
+    ),
+    InputFieldSpec(
+        key="company_legal_name",
+        label="Company legal name",
+        help_text="Your company's legal name as the supplier.",
+        kind="text",
+        required=True,
+        max_length=200,
+    ),
+    InputFieldSpec(
+        key="governing_agreement",
+        label="Governing agreement",
+        help_text="Optional master agreement title and date (for example MSA dated …).",
+        kind="text",
+        required=False,
+        max_length=300,
+    ),
+    InputFieldSpec(
+        key="kickoff_date",
+        label="Kickoff date",
+        help_text="Optional. Used only for indicative calendar dates on the timeline.",
+        kind="date",
+        required=False,
+    ),
+    InputFieldSpec(
+        key="pricing_model",
+        label="Pricing model",
+        help_text="How fees are structured for this SOW.",
+        kind="select",
+        required=True,
+        options=("fixed_price", "time_and_materials", "milestone_based", "not_specified"),
+        default="not_specified",
+    ),
+    InputFieldSpec(
+        key="total_fee",
+        label="Total fee",
+        help_text="Optional fixed fee amount; payment schedule amounts are derived when set.",
+        kind="number",
+        required=False,
+        min_value=0,
+        step=0.01,
+    ),
+    InputFieldSpec(
+        key="currency",
+        label="Currency",
+        help_text="Optional currency code (for example INR, USD).",
+        kind="text",
+        required=False,
+        max_length=8,
+        pattern=r"^[A-Za-z]{0,8}$",
+    ),
+    InputFieldSpec(
+        key="payment_schedule",
+        label="Payment schedule",
+        help_text=(
+            "Optional payment milestones. For fixed price or milestone-based pricing, "
+            "percentages must total 100."
+        ),
+        kind="table",
+        required=False,
+        min_rows=0,
+        max_rows=12,
+        columns=PAYMENT_COLUMNS,
+    ),
+    InputFieldSpec(
+        key="review_period_business_days",
+        label="Acceptance review period (business days)",
+        help_text="Business days the client has to review each deliverable submission.",
+        kind="number",
+        required=True,
+        min_value=1,
+        max_value=30,
+        default=5,
+    ),
+    InputFieldSpec(
+        key="warranty_days",
+        label="Warranty period (days)",
+        help_text="Days after acceptance during which defects are remediated at no charge.",
+        kind="number",
+        required=True,
+        min_value=0,
+        max_value=365,
+        default=30,
+    ),
+    InputFieldSpec(
+        key="sprint_length_weeks",
+        label="Sprint length (weeks)",
+        help_text="Used in governance text for demo cadence.",
+        kind="number",
+        required=True,
+        min_value=1,
+        max_value=4,
+        default=2,
+    ),
+    InputFieldSpec(
+        key="show_effort_hours",
+        label="Show estimated effort hours",
+        help_text="When yes, Appendix B and effort tables include recommended hours.",
+        kind="select",
+        required=True,
+        options=("no", "yes"),
+        default="no",
+    ),
+    InputFieldSpec(
+        key="team_display",
+        label="Team display",
+        help_text="Whether headcount appears alongside role names.",
+        kind="select",
+        required=True,
+        options=("roles_only", "roles_and_headcount"),
+        default="roles_only",
+    ),
+    InputFieldSpec(
+        key="notes",
+        label="Additional instructions for the SOW",
+        help_text="Optional notes used only for this generation.",
+        kind="textarea",
+        max_length=8000,
+        required=False,
+    ),
+)

@@ -186,6 +186,10 @@ export function restoreProject(projectId: string): Promise<ProjectSummary> {
   return apiRequest<ProjectSummary>(`/projects/${projectId}/restore`, { method: 'POST' })
 }
 
+export function deleteProject(projectId: string): Promise<void> {
+  return apiRequest<void>(`/projects/${projectId}`, { method: 'DELETE' })
+}
+
 export function patchProjectSettings(
   projectId: string,
   allow_self_approval: boolean | null,

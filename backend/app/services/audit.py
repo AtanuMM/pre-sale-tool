@@ -46,6 +46,7 @@ class AuditAction:
     PROJECT_SETTINGS_CHANGED = "project.settings_changed"
     PROJECT_ARCHIVED = "project.archived"
     PROJECT_RESTORED = "project.restored"
+    PROJECT_DELETED = "project.deleted"
     AUDIT_EXPORTED = "audit.exported"
 
 

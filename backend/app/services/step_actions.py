@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import uuid
+from typing import Any
 
 from fastapi import HTTPException, status
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -35,6 +36,11 @@ from app.services.step_version_context import (
     upstream_dependencies_still_approved,
 )
 from app.steps.definitions import get_step
+from app.steps.input_fields import (
+    StepInputValidationError,
+    user_inputs_audit_metadata,
+    validate_step_inputs,
+)
 
 ERR_NOT_IN_REVIEW = "Only an in-review version can be revised or approved"
 ERR_NOT_CURRENT = "This version is not the current review version for the step"
@@ -45,14 +51,20 @@ ERR_SELF_APPROVAL_BLOCKED = SELF_APPROVAL_FORBIDDEN
 
 
 class RequestChangesBody(BaseModel):
-    instructions: str = Field(..., min_length=1, max_length=4000)
+    model_config = ConfigDict(extra="forbid")
+
+    instructions: str | None = Field(default=None, max_length=4000)
+    inputs: dict[str, Any] | None = None
+    parts: list[str] | None = Field(default=None, max_length=40)
 
     @field_validator("instructions")
     @classmethod
-    def strip_instructions(cls, value: str) -> str:
+    def strip_instructions(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
         stripped = value.strip()
         if not stripped:
-            raise ValueError("Instructions cannot be whitespace only")
+            return None
         return stripped
 
 
@@ -119,6 +131,9 @@ def request_step_changes(
     if not is_current_review_version(session, base):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=ERR_NOT_CURRENT)
 
+    if not upstream_dependencies_still_approved(session, base.id):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=ERR_UPSTREAM_CHANGED)
+
     max_no = session.scalar(
         select(func.max(StepVersion.version_no)).where(
             StepVersion.project_id == base.project_id,
@@ -126,7 +141,57 @@ def request_step_changes(
         )
     )
     next_no = (max_no or 0) + 1
+
+    carried: dict = {}
+    if body.inputs is not None:
+        try:
+            cleaned = validate_step_inputs(defn.input_fields, body.inputs)
+        except StepInputValidationError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=[{"type": "value_error", **item} for item in exc.errors],
+            ) from exc
+        if cleaned:
+            carried["user_inputs"] = cleaned
+    else:
+        base_user_inputs = (base.inputs or {}).get("user_inputs")
+        if isinstance(base_user_inputs, dict) and base_user_inputs:
+            carried["user_inputs"] = base_user_inputs
+
+    base_user_inputs = (base.inputs or {}).get("user_inputs")
+    if not isinstance(base_user_inputs, dict):
+        base_user_inputs = {}
+    new_user_inputs = carried.get("user_inputs") if isinstance(carried.get("user_inputs"), dict) else base_user_inputs
+    from app.services.sow_generation import inputs_changed
+    from app.steps.sprint_plan_inputs import scheduling_inputs_changed
+
+    inputs_differ = inputs_changed(base_user_inputs, new_user_inputs)
     instructions = body.instructions
+    if defn.supports_reassemble and inputs_differ and not instructions:
+        instructions = "Inputs updated"
+    if base.step_key == "sprint_plan" and scheduling_inputs_changed(base_user_inputs, new_user_inputs) and not instructions:
+        instructions = "Inputs updated"
+    revision_parts: list[str] | None = None
+    if body.parts:
+        revision_parts = [p.strip() for p in body.parts if p and p.strip()]
+    if base.step_key == "srs" and revision_parts and not instructions:
+        instructions = "Partial revision requested"
+    if base.step_key == "sprint_plan" and revision_parts and not instructions:
+        instructions = "Partial revision requested"
+    if not instructions:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=[
+                {
+                    "type": "value_error",
+                    "loc": ["body", "instructions"],
+                    "msg": "Instructions are required when inputs are unchanged",
+                }
+            ],
+        )
+
+    if revision_parts:
+        carried["revision_parts"] = revision_parts
 
     new_version = StepVersion(
         project_id=base.project_id,
@@ -135,7 +200,7 @@ def request_step_changes(
         status="queued",
         source="generated",
         content=None,
-        inputs={},
+        inputs=carried,
         instructions=instructions,
         based_on_version_id=base.id,
         created_by=actor.id,
@@ -153,6 +218,7 @@ def request_step_changes(
         ) from exc
 
     copy_dependencies(session, from_version_id=base.id, to_version_id=new_version.id)
+    base.status = "changes_requested"
 
     record_audit(
         session,
@@ -168,6 +234,16 @@ def request_step_changes(
             "base_version_no": base.version_no,
             "new_version_no": next_no,
             "instructions_length": len(instructions),
+            "reassemble": 1 if instructions == "Inputs updated" else 0,
+            **(
+                {
+                    "user_inputs": user_inputs_audit_metadata(
+                        defn.input_fields, carried.get("user_inputs") or {}
+                    )
+                }
+                if defn.input_fields
+                else {}
+            ),
         },
         ip_address=audit_ip,
         user_agent=audit_ua,

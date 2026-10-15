@@ -14,6 +14,14 @@ export function stepVersionDownloadLabel(status: StepVersionStatus): string {
   return status === 'approved' ? 'Download .docx' : 'Download draft .docx'
 }
 
+export function exportFormatLabel(format: string, status: StepVersionStatus): string {
+  const draft = status !== 'approved'
+  if (format === 'docx') return draft ? 'Word (.docx) draft' : 'Word (.docx)'
+  if (format === 'xlsx') return draft ? 'Excel (.xlsx) draft' : 'Excel (.xlsx)'
+  if (format === 'csv') return draft ? 'CSV draft' : 'CSV'
+  return format
+}
+
 export function stepVersionDownloadToastError(status: number, message: string): string {
   if (status === 404) return 'Version not found.'
   if (status === 409) return 'No content to download for this version.'

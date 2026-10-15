@@ -1,9 +1,12 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Loader2Icon, PlusIcon, SearchIcon } from 'lucide-react'
+import { Loader2Icon, PlusIcon, SearchIcon, Trash2Icon } from 'lucide-react'
+import { toast } from 'sonner'
 
-import { listProjects, type ProjectStatus } from '@/api/projects'
+import { ApiError } from '@/api/errors'
+import { deleteProject, listProjects, type ProjectListItem, type ProjectStatus } from '@/api/projects'
+import { ConfirmDialog } from '@/components/layout/ConfirmDialog'
 import { EmptyState } from '@/components/layout/EmptyState'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { ProjectStatusBadge } from '@/components/projects/ProjectStatusBadge'
@@ -28,7 +31,7 @@ import {
 } from '@/components/ui/table'
 import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 import { formatAbsoluteDateTime } from '@/lib/formatRelativeTime'
-import { PERMISSION_PROJECT_CREATE } from '@/lib/permissions'
+import { PERMISSION_PROJECT_CREATE, PERMISSION_PROJECT_DELETE } from '@/lib/permissions'
 
 const PAGE_SIZE = 20
 
@@ -37,11 +40,14 @@ type StatusFilter = 'all' | ProjectStatus
 export function ProjectsListPage() {
   useDocumentTitle('Projects')
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const { hasPermission } = useAuth()
+  const canDelete = hasPermission(PERMISSION_PROJECT_DELETE)
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [page, setPage] = useState(0)
+  const [pendingDelete, setPendingDelete] = useState<ProjectListItem | null>(null)
 
   useEffect(() => {
     const t = window.setTimeout(() => {
@@ -60,6 +66,18 @@ export function ProjectsListPage() {
         search: debouncedSearch || undefined,
         status: statusFilter === 'all' ? undefined : statusFilter,
       }),
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (projectId: string) => deleteProject(projectId),
+    onSuccess: () => {
+      toast.success('Project deleted')
+      setPendingDelete(null)
+      void queryClient.invalidateQueries({ queryKey: ['projects'] })
+    },
+    onError: (err: Error) => {
+      toast.error(err instanceof ApiError ? err.displayMessage() : 'Delete failed')
+    },
   })
 
   const total = query.data?.total ?? 0
@@ -163,6 +181,11 @@ export function ProjectsListPage() {
                   <TableHead>Status</TableHead>
                   <TableHead>Created by</TableHead>
                   <TableHead>Created</TableHead>
+                  {canDelete ? (
+                    <TableHead className="w-12">
+                      <span className="sr-only">Actions</span>
+                    </TableHead>
+                  ) : null}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -179,6 +202,19 @@ export function ProjectsListPage() {
                     </TableCell>
                     <TableCell>{row.created_by_name ?? '—'}</TableCell>
                     <TableCell>{formatAbsoluteDateTime(row.created_at)}</TableCell>
+                    {canDelete ? (
+                      <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label={`Delete ${row.name}`}
+                          onClick={() => setPendingDelete(row)}
+                        >
+                          <Trash2Icon />
+                        </Button>
+                      </TableCell>
+                    ) : null}
                   </TableRow>
                 ))}
               </TableBody>
@@ -213,6 +249,20 @@ export function ProjectsListPage() {
       {query.isFetching && !query.isLoading ? (
         <Loader2Icon className="size-4 animate-spin text-muted-foreground" aria-label="Refreshing" />
       ) : null}
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title="Delete this project?"
+        description="This permanently removes the project and its workflow data. This cannot be undone."
+        confirmLabel="Delete"
+        loading={deleteMutation.isPending}
+        onConfirm={() => {
+          if (pendingDelete) deleteMutation.mutate(pendingDelete.id)
+        }}
+        onCancel={() => {
+          if (!deleteMutation.isPending) setPendingDelete(null)
+        }}
+      />
     </div>
   )
 }

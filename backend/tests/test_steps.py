@@ -84,6 +84,7 @@ def _steps_env(monkeypatch: pytest.MonkeyPatch) -> None:
     )
     monkeypatch.setenv("APP_ENV", "test")
     monkeypatch.setenv("GENERATION_TIMEOUT_SECONDS", "300")
+    monkeypatch.setenv("ESTIMATE_GENERATION_TIMEOUT_SECONDS", "30")
     monkeypatch.setenv("MAX_CONCURRENT_GENERATIONS", "2")
     get_settings.cache_clear()
     reset_generation_limits_for_tests()
@@ -269,7 +270,7 @@ def test_unimplemented_step_409(client: TestClient, seeded_session) -> None:
     headers = _auth(client, settings)
     created = _create_project_multipart(client, headers)
     pid = created["project"]["id"]
-    resp = client.post(f"/projects/{pid}/steps/feature_list/generate", headers=headers)
+    resp = client.post(f"/projects/{pid}/steps/frs/generate", headers=headers)
     assert resp.status_code == 409
 
 
@@ -288,7 +289,7 @@ def test_no_readable_content_422(
     assert resp.json()["detail"] == ERR_NO_CONTENT
 
 
-@patch("app.services.step_generation.run_generation")
+@patch("app.routers.steps.run_generation")
 def test_double_generate_409(
     mock_run: MagicMock,
     client: TestClient,
@@ -491,7 +492,7 @@ def test_llm_validation_failure_generic_error(
     assert "validation" not in detail["error"].lower()
 
 
-@patch("app.services.step_generation.run_generation")
+@patch("app.routers.steps.run_generation")
 def test_post_generate_accepts_empty_json(
     mock_run: MagicMock,
     client: TestClient,

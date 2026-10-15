@@ -37,11 +37,19 @@ export class ApiError extends Error {
 export async function parseApiError(response: Response): Promise<ApiError> {
   let detail: ApiErrorDetail = response.statusText
   try {
-    const body: unknown = await response.json()
-    if (body && typeof body === 'object' && 'detail' in body) {
-      const raw = (body as { detail: unknown }).detail
-      if (typeof raw === 'string' || Array.isArray(raw)) {
-        detail = raw as ApiErrorDetail
+    const contentType = response.headers.get('Content-Type') ?? ''
+    if (contentType.includes('application/json')) {
+      const body: unknown = await response.json()
+      if (body && typeof body === 'object' && 'detail' in body) {
+        const raw = (body as { detail: unknown }).detail
+        if (typeof raw === 'string' || Array.isArray(raw)) {
+          detail = raw as ApiErrorDetail
+        }
+      }
+    } else {
+      const text = (await response.text()).trim()
+      if (text) {
+        detail = text
       }
     }
   } catch {

@@ -22,6 +22,7 @@ function step(status: ProjectStep['status']): ProjectStep {
     reads_description: '',
     writes_description: '',
     context_steps: [],
+    input_fields: [],
   }
 }
 

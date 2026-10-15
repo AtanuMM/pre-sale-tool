@@ -4,6 +4,7 @@ const ALL_PERMISSIONS = [
   'project.create',
   'project.view',
   'project.archive',
+  'project.delete',
   'input.add',
   'step.generate',
   'step.request_changes',

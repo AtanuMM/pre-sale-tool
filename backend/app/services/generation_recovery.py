@@ -21,9 +21,25 @@ STARTUP_RECOVERY_ADVISORY_KEY = 0x53444B5F524543  # "SDK_REC"
 GENERIC_INTERRUPTED = "Generation was interrupted"
 
 
-def _expiry_cutoff() -> datetime:
+def _timeout_seconds_for_step(step_key: str) -> float:
     settings = get_settings()
-    seconds = settings.GENERATION_TIMEOUT_SECONDS + settings.GENERATION_RECOVERY_MARGIN_SECONDS
+    if step_key == "estimate":
+        return settings.ESTIMATE_GENERATION_TIMEOUT_SECONDS
+    if step_key == "srs":
+        return settings.SRS_GENERATION_TIMEOUT_SECONDS
+    if step_key == "sprint_plan":
+        return settings.SPRINT_PLAN_GENERATION_TIMEOUT_SECONDS
+    return settings.GENERATION_TIMEOUT_SECONDS
+
+
+def _expiry_cutoff(step_key: str | None = None) -> datetime:
+    settings = get_settings()
+    base = (
+        _timeout_seconds_for_step(step_key)
+        if step_key
+        else settings.GENERATION_TIMEOUT_SECONDS
+    )
+    seconds = base + settings.GENERATION_RECOVERY_MARGIN_SECONDS
     return datetime.now(UTC) - timedelta(seconds=seconds)
 
 
@@ -38,7 +54,6 @@ def _is_expired(row: StepVersion, cutoff: datetime) -> bool:
 
 def expire_in_flight_for_project(session: Session, project_id: uuid.UUID) -> int:
     """Mark expired queued/generating rows failed for one project (same transaction)."""
-    cutoff = _expiry_cutoff()
     rows = session.scalars(
         select(StepVersion).where(
             StepVersion.project_id == project_id,
@@ -48,6 +63,7 @@ def expire_in_flight_for_project(session: Session, project_id: uuid.UUID) -> int
     count = 0
     now = datetime.now(UTC)
     for row in rows:
+        cutoff = _expiry_cutoff(row.step_key)
         if not _is_expired(row, cutoff):
             continue
         row.status = "failed"
@@ -73,7 +89,6 @@ def expire_in_flight_for_project(session: Session, project_id: uuid.UUID) -> int
 
 def expire_in_flight_startup(session: Session) -> int:
     """Global startup sweep; caller must hold pg_try_advisory_xact_lock."""
-    cutoff = _expiry_cutoff()
     rows = session.scalars(
         select(StepVersion).where(
             StepVersion.status.in_(("queued", "generating")),
@@ -82,6 +97,7 @@ def expire_in_flight_startup(session: Session) -> int:
     count = 0
     now = datetime.now(UTC)
     for row in rows:
+        cutoff = _expiry_cutoff(row.step_key)
         if not _is_expired(row, cutoff):
             continue
         row.status = "failed"

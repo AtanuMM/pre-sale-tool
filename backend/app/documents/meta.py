@@ -44,13 +44,10 @@ def build_marker_line(
 ) -> str:
     if status == "approved":
         if approval is not None:
-            line = (
+            return (
                 f"Approved by {approval.approved_by_name} on "
                 f"{format_export_date(approval.approved_at)}"
             )
-            if approval.self_approved:
-                line = f"{line}. Self-approved"
-            return line
         if fallback_approved_at is not None:
             return f"Approved on {format_export_date(fallback_approved_at)}"
         return "Approved"

@@ -173,6 +173,7 @@ PERMISSION_ENDPOINTS = (
     ("PATCH", "/projects/{pid}/settings", "settings.manage"),
     ("POST", "/projects/{pid}/archive", "project.archive"),
     ("POST", "/projects/{pid}/restore", "project.archive"),
+    ("DELETE", "/projects/{pid}", "project.delete"),
 )
 
 
@@ -445,6 +446,75 @@ def test_archive_restore_completed(
     restored = client.post(f"/projects/{pid}/restore", headers=headers)
     assert restored.status_code == 200
     assert restored.json()["status"] == "completed"
+
+
+def test_delete_project_removes_row_and_audits_without_client_text(
+    client: TestClient, seeded_session
+) -> None:
+    headers = _auth(client, seeded_session[1])
+    secret = "super-secret-client-body-for-delete"
+    created = _create_project_multipart(
+        client, headers, body=secret, name="Delete Me", client_name="Contoso Example"
+    )
+    pid = created["project"]["id"]
+    factory = seeded_session[0]
+    with factory() as session:
+        from app.models.steps import StepVersion
+
+        session.add(
+            StepVersion(
+                project_id=uuid.UUID(pid),
+                step_key="scope_analysis",
+                version_no=1,
+                status="failed",
+                source="generated",
+                inputs={},
+            )
+        )
+        session.commit()
+
+    resp = client.delete(f"/projects/{pid}", headers=headers)
+    assert resp.status_code == 204
+    assert client.get(f"/projects/{pid}", headers=headers).status_code == 404
+    listed = client.get("/projects", headers=headers).json()
+    assert all(item["id"] != pid for item in listed["items"])
+
+    with factory() as session:
+        assert session.get(Project, uuid.UUID(pid)) is None
+        from app.models.steps import StepVersion
+
+        leftover = session.scalars(
+            select(StepVersion).where(StepVersion.project_id == uuid.UUID(pid))
+        ).all()
+        assert leftover == []
+        deleted = session.scalar(
+            select(AuditLog).where(AuditLog.action == AuditAction.PROJECT_DELETED)
+        )
+        assert deleted is not None
+        assert deleted.project_id is None
+        blob = json.dumps(deleted.meta)
+        assert secret not in blob
+        assert "Contoso" not in blob
+        assert "Delete Me" not in blob
+        assert deleted.meta.get("project_id") == pid
+
+
+def test_delete_project_forbidden_for_viewer(
+    client: TestClient, seeded_session
+) -> None:
+    headers = _auth(client, seeded_session[1])
+    created = _create_project_multipart(client, headers, body="body")
+    pid = created["project"]["id"]
+    factory = seeded_session[0]
+    viewer = _viewer_headers(client, factory)
+    assert client.delete(f"/projects/{pid}", headers=viewer).status_code == 403
+    assert client.get(f"/projects/{pid}", headers=headers).status_code == 200
+
+
+def test_delete_unknown_project_404(client: TestClient, seeded_session) -> None:
+    headers = _auth(client, seeded_session[1])
+    missing = uuid.uuid4()
+    assert client.delete(f"/projects/{missing}", headers=headers).status_code == 404
 
 
 @pytestmark_storage

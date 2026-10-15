@@ -47,6 +47,7 @@ vi.mock('@/api/projects', () => ({
   }),
   archiveProject: vi.fn(),
   restoreProject: vi.fn(),
+  deleteProject: vi.fn(),
   patchProjectSettings: vi.fn(),
   createFollowUpInput: vi.fn(),
   downloadProjectFile: vi.fn(),

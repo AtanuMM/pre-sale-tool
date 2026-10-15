@@ -127,6 +127,21 @@ def test_derive_step_status_table(
             True,
         ),
         ("estimate", "active", {"scope_analysis": [v(1, "approved")]}, False),
+        (
+            "feature_list",
+            "active",
+            {
+                "scope_analysis": [v(1, "approved")],
+                "gap_analysis": [v(1, "approved")],
+            },
+            True,
+        ),
+        (
+            "feature_list",
+            "active",
+            {"scope_analysis": [v(1, "approved")]},
+            False,
+        ),
     ],
 )
 def test_can_generate_table(step_key, project_status, versions_by_step, expected) -> None:

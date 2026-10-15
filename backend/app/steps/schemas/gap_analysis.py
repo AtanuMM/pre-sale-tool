@@ -39,6 +39,14 @@ class GapItem(BaseModel):
         description="Optional reference to scope analysis section.",
         max_length=300,
     )
+    evidence: str = Field(
+        default="",
+        description=(
+            "Requirement id, section name, or a short quote of at most 15 words "
+            "from the intake or approved scope."
+        ),
+        max_length=200,
+    )
 
 
 class GapAnalysisOutput(BaseModel):

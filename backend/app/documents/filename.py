@@ -21,6 +21,7 @@ def build_step_export_filename(
     step_key: str,
     version_no: int,
     is_draft: bool,
+    extension: str = "docx",
 ) -> str:
     project = _slug_part(project_name)[:60]
     step = _slug_part(step_key.replace("_", "-"))[:40]
@@ -29,4 +30,5 @@ def build_step_export_filename(
         base = f"{base}-DRAFT"
     if len(base) > _MAX_BASENAME_LEN:
         base = base[:_MAX_BASENAME_LEN].rstrip("-")
-    return f"{base}.docx"
+    ext = extension.lstrip(".").lower() or "docx"
+    return f"{base}.{ext}"

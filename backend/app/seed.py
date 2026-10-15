@@ -17,6 +17,7 @@ ALL_PERMISSIONS: tuple[str, ...] = (
     "project.create",
     "project.view",
     "project.archive",
+    "project.delete",
     "input.add",
     "step.generate",
     "step.request_changes",

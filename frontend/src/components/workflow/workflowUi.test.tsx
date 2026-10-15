@@ -32,13 +32,13 @@ vi.mock('@/api/steps', async (importOriginal) => {
     requestStepChanges: vi.fn(),
     approveStepVersion: vi.fn(),
     getStepVersionPrompt: vi.fn(),
-    downloadStepVersionDocx: vi.fn(),
+    downloadStepVersion: vi.fn(),
   }
 })
 
 import {
   approveStepVersion,
-  downloadStepVersionDocx,
+  downloadStepVersion,
   getStepVersionDetail,
   getStepVersions,
   requestStepChanges,
@@ -90,6 +90,7 @@ function baseStep(overrides: Partial<ProjectStep>): ProjectStep {
     reads_description: 'Reads intake.',
     writes_description: 'Writes scope.',
     context_steps: [],
+    input_fields: [],
     ...overrides,
   }
 }
@@ -188,6 +189,11 @@ describe('validateRequestChangesText', () => {
 
   it('rejects over 4000', () => {
     expect(validateRequestChangesText('a'.repeat(4001))).toMatch(/4000/)
+  })
+
+  it('allows empty when reassemble-only', () => {
+    expect(validateRequestChangesText('', { allowEmpty: true })).toBeNull()
+    expect(validateRequestChangesText('   ', { allowEmpty: true })).toBeNull()
   })
 })
 
@@ -337,7 +343,7 @@ describe('StepPanel', () => {
         error: null,
       },
     ])
-    vi.mocked(downloadStepVersionDocx).mockResolvedValue({
+    vi.mocked(downloadStepVersion).mockResolvedValue({
       blob: new Blob(['x']),
       filename: 'draft.docx',
     })
@@ -352,7 +358,7 @@ describe('StepPanel', () => {
     const btn = await screen.findByRole('button', { name: /download draft/i })
     await user.click(btn)
     await waitFor(() => {
-      expect(downloadStepVersionDocx).toHaveBeenCalledWith('v1', 'scope_analysis-v1.docx')
+      expect(downloadStepVersion).toHaveBeenCalledWith('v1', 'docx', 'scope_analysis-v1.docx')
     })
     expect(triggerBrowserDownload).toHaveBeenCalled()
   })

@@ -11,6 +11,7 @@ export const PERMISSION_SETTINGS_MANAGE = 'settings.manage'
 export const PERMISSION_PROJECT_VIEW = 'project.view'
 export const PERMISSION_PROJECT_CREATE = 'project.create'
 export const PERMISSION_PROJECT_ARCHIVE = 'project.archive'
+export const PERMISSION_PROJECT_DELETE = 'project.delete'
 export const PERMISSION_INPUT_ADD = 'input.add'
 
 export const PERMISSION_STEP_GENERATE = 'step.generate'

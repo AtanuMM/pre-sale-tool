@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Loader2Icon } from 'lucide-react'
+import { ChevronDownIcon, Loader2Icon } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 
@@ -8,7 +8,7 @@ import { triggerBrowserDownload } from '@/api/download'
 import type { InputRecord } from '@/api/projects'
 import {
   approveStepVersion,
-  downloadStepVersionDocx,
+  downloadStepVersion,
   generateStep,
   getStepVersionDetail,
   getStepVersions,
@@ -16,17 +16,25 @@ import {
   type ProjectStep,
   type StepVersionSummary,
 } from '@/api/steps'
+import { generationFailureHint } from '@/lib/generationFailureHints'
 import { ExtractionBadge } from '@/components/projects/ExtractionBadge'
 import { ApproveStepDialog } from '@/components/workflow/ApproveStepDialog'
 import { GenerationElapsed } from '@/components/workflow/GenerationElapsed'
 import { PromptViewerSheet } from '@/components/workflow/PromptViewerSheet'
 import { RequestChangesSheet, validateRequestChangesText } from '@/components/workflow/RequestChangesSheet'
 import { GenericStepViewer } from '@/components/workflow/GenericStepViewer'
+import { StepInputFields } from '@/components/workflow/StepInputFields'
 import { VersionHistoryPanel } from '@/components/workflow/VersionHistoryPanel'
 import { generationStartIso } from '@/components/workflow/workflowSelection'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Skeleton } from '@/components/ui/skeleton'
 import { formatAbsoluteDateTime } from '@/lib/formatRelativeTime'
 import {
@@ -37,10 +45,13 @@ import {
   PERMISSION_STEP_REQUEST_CHANGES,
 } from '@/lib/permissions'
 import {
+  exportFormatLabel,
   stepVersionCanDownload,
   stepVersionDownloadLabel,
   stepVersionDownloadToastError,
 } from '@/lib/stepVersionDownload'
+import { collectStepInputs, defaultInputValues, parseUserInputs } from '@/lib/stepInputValues'
+import type { StepInputValue } from '@/lib/stepLayoutTypes'
 import { syncWorkflowAfter409, syncWorkflowAfterMutation } from '@/lib/workflowQuerySync'
 
 type StepPanelProps = {
@@ -66,6 +77,8 @@ export function StepPanel({
   const [downloadingVersionId, setDownloadingVersionId] = useState<string | null>(
     null,
   )
+  const [draftInputs, setDraftInputs] = useState<Record<string, StepInputValue>>({})
+  const [requestInputs, setRequestInputs] = useState<Record<string, StepInputValue>>({})
 
   const currentVersionId = step.current_version_id
   const displayVersionId =
@@ -74,6 +87,12 @@ export function StepPanel({
   useEffect(() => {
     setSelectedVersionId(null)
   }, [step.key, step.current_version_id])
+
+  useEffect(() => {
+    setDraftInputs(defaultInputValues(step.input_fields))
+    // Defaults follow the step identity; field specs are stable per step key.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step.key])
 
   const versionsQuery = useQuery({
     queryKey: ['projects', projectId, 'steps', step.key, 'versions'],
@@ -117,11 +136,14 @@ export function StepPanel({
     detailQuery.data.status != null &&
     stepVersionCanDownload(detailQuery.data.status)
 
-  const handleDownloadVersion = async (version: StepVersionSummary) => {
+  const handleDownloadVersion = async (
+    version: StepVersionSummary,
+    format = 'docx',
+  ) => {
     setDownloadingVersionId(version.id)
     try {
-      const fallback = `${step.key}-v${version.version_no}.docx`
-      const { blob, filename } = await downloadStepVersionDocx(version.id, fallback)
+      const fallback = `${step.key}-v${version.version_no}.${format}`
+      const { blob, filename } = await downloadStepVersion(version.id, format, fallback)
       triggerBrowserDownload(blob, filename)
     } catch (err) {
       if (err instanceof ApiError) {
@@ -129,7 +151,8 @@ export function StepPanel({
           stepVersionDownloadToastError(err.status, err.displayMessage()),
         )
       } else {
-        toast.error('Download failed.')
+        const msg = err instanceof Error ? err.message : ''
+        toast.error(msg || 'Download failed.')
       }
     } finally {
       setDownloadingVersionId(null)
@@ -148,17 +171,30 @@ export function StepPanel({
   }
 
   const generateMutation = useMutation({
-    mutationFn: () => generateStep(projectId, step.key),
+    mutationFn: () => {
+      const inputs = collectStepInputs(step.input_fields, draftInputs)
+      return generateStep(
+        projectId,
+        step.key,
+        Object.keys(inputs).length > 0 ? inputs : undefined,
+      )
+    },
     onSuccess: async () => {
       toast.success('Generation started')
+      setDraftInputs(defaultInputValues(step.input_fields))
       await syncWorkflowAfterMutation(queryClient, projectId, step.key)
     },
     onError: (err) => void handleMutationError(err),
   })
 
   const requestMutation = useMutation({
-    mutationFn: (instructions: string) =>
-      requestStepChanges(currentVersionId!, instructions),
+    mutationFn: (instructions: string | null) => {
+      const inputs =
+        step.input_fields.length > 0
+          ? collectStepInputs(step.input_fields, requestInputs)
+          : undefined
+      return requestStepChanges(currentVersionId!, instructions, inputs)
+    },
     onSuccess: async () => {
       toast.success('Revision requested')
       setRequestOpen(false)
@@ -257,8 +293,41 @@ export function StepPanel({
               </div>
             ) : null}
             {step.has_failed_attempt && step.latest_version?.error ? (
-              <p className="text-destructive">{step.latest_version.error}</p>
+              <div className="space-y-1">
+                <p className="text-destructive">{step.latest_version.error}</p>
+                {step.latest_version.generation_progress ? (
+                  <p className="text-sm text-muted-foreground">
+                    Last run stopped at step {step.latest_version.generation_progress.done} of{' '}
+                    {step.latest_version.generation_progress.total}.
+                  </p>
+                ) : null}
+                {step.latest_version.failure_detail ? (
+                  <p className="text-sm text-muted-foreground">
+                    {step.latest_version.failure_detail}
+                  </p>
+                ) : null}
+                {(() => {
+                  const hint = generationFailureHint(step.latest_version.failure_code)
+                  return hint ? (
+                    <p className="text-sm text-muted-foreground">{hint}</p>
+                  ) : null
+                })()}
+              </div>
             ) : null}
+            {step.key === 'sprint_plan' ? (
+              <p className="text-muted-foreground">
+                Team and capacity are read from the approved estimate. To change the team, revise
+                the estimate.
+              </p>
+            ) : null}
+            <StepInputFields
+              fields={step.input_fields}
+              values={draftInputs}
+              onChange={(key, value) =>
+                setDraftInputs((prev) => ({ ...prev, [key]: value }))
+              }
+              disabled={generateMutation.isPending}
+            />
             {canShowGenerate ? (
               <div className="space-y-2">
                 <Button
@@ -292,7 +361,29 @@ export function StepPanel({
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-2 text-sm">
-          <p>Reading inputs and writing the output. This usually takes under a minute.</p>
+          {(() => {
+            const progress =
+              generatingDetailQuery.data?.inputs?.generation_progress ??
+              step.generation_progress
+            const done =
+              progress && typeof progress === 'object' && typeof (progress as { done?: unknown }).done === 'number'
+                ? (progress as { done: number }).done
+                : null
+            const total =
+              progress && typeof progress === 'object' && typeof (progress as { total?: unknown }).total === 'number'
+                ? (progress as { total: number }).total
+                : null
+            if (step.key === 'estimate' && done != null && total != null && total > 0) {
+              return <p>Estimating batch {done} of {total}.</p>
+            }
+            if (step.key === 'srs' && done != null && total != null && total > 0) {
+              return <p>Writing the SRS, part {done} of {total}.</p>
+            }
+            if (step.key === 'sprint_plan' && done != null && total != null && total > 0) {
+              return <p>Planning the sprints, part {done} of {total}.</p>
+            }
+            return <p>Reading inputs and writing the output. This usually takes under a minute.</p>
+          })()}
           <p className="text-muted-foreground">
             Elapsed: <GenerationElapsed startIso={generationStart} />
           </p>
@@ -387,8 +478,14 @@ export function StepPanel({
           {detailQuery.isLoading ? <Skeleton className="h-64 w-full" /> : null}
           {detailQuery.data?.content &&
           Object.keys(detailQuery.data.content).length > 0 &&
-          step.layout.length > 0 ? (
-            <GenericStepViewer layout={step.layout} content={detailQuery.data.content} />
+          (detailQuery.data.layout ?? step.layout).length > 0 ? (
+            <GenericStepViewer
+              layout={detailQuery.data.layout ?? step.layout}
+              content={{
+                ...detailQuery.data.content,
+                version_id: displayVersionId ?? detailQuery.data.id,
+              }}
+            />
           ) : detailQuery.isSuccess ? (
             <p className="text-sm text-muted-foreground">No output content for this version.</p>
           ) : null}
@@ -397,24 +494,61 @@ export function StepPanel({
 
       {canShowDownload && displayVersionId && detailHasExportableContent ? (
         <div className="flex flex-wrap items-center gap-3">
-          <Button
-            type="button"
-            variant="outline"
-            disabled={downloadingVersionId === displayVersionId}
-            onClick={() => {
-              const v = versionsQuery.data?.find((row) => row.id === displayVersionId)
-              if (v) void handleDownloadVersion(v)
-            }}
-          >
-            {downloadingVersionId === displayVersionId ? (
-              <>
-                <Loader2Icon className="size-4 animate-spin" aria-hidden />
-                Downloading…
-              </>
-            ) : (
-              stepVersionDownloadLabel(detailQuery.data!.status)
-            )}
-          </Button>
+          {(step.export_formats ?? ['docx']).length > 1 ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={downloadingVersionId === displayVersionId}
+                >
+                  {downloadingVersionId === displayVersionId ? (
+                    <>
+                      <Loader2Icon className="size-4 animate-spin" aria-hidden />
+                      Downloading…
+                    </>
+                  ) : (
+                    <>
+                      Download
+                      <ChevronDownIcon className="size-4" aria-hidden />
+                    </>
+                  )}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                {(step.export_formats ?? ['docx']).map((fmt) => (
+                  <DropdownMenuItem
+                    key={fmt}
+                    onSelect={() => {
+                      const v = versionsQuery.data?.find((row) => row.id === displayVersionId)
+                      if (v) void handleDownloadVersion(v, fmt)
+                    }}
+                  >
+                    {exportFormatLabel(fmt, detailQuery.data!.status)}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <Button
+              type="button"
+              variant="outline"
+              disabled={downloadingVersionId === displayVersionId}
+              onClick={() => {
+                const v = versionsQuery.data?.find((row) => row.id === displayVersionId)
+                if (v) void handleDownloadVersion(v)
+              }}
+            >
+              {downloadingVersionId === displayVersionId ? (
+                <>
+                  <Loader2Icon className="size-4 animate-spin" aria-hidden />
+                  Downloading…
+                </>
+              ) : (
+                stepVersionDownloadLabel(detailQuery.data!.status)
+              )}
+            </Button>
+          )}
         </div>
       ) : null}
 
@@ -425,7 +559,12 @@ export function StepPanel({
               type="button"
               variant="outline"
               disabled={!step.can_request_changes || requestMutation.isPending}
-              onClick={() => setRequestOpen(true)}
+              onClick={() => {
+                setRequestInputs(
+                  parseUserInputs(detailQuery.data?.inputs?.user_inputs, step.input_fields),
+                )
+                setRequestOpen(true)
+              }}
             >
               Request changes
             </Button>
@@ -465,21 +604,60 @@ export function StepPanel({
         onTextChange={setRequestText}
         error={requestError}
         submitting={requestMutation.isPending}
+        inputFields={step.input_fields}
+        inputValues={requestInputs}
+        onInputChange={(key, value) =>
+          setRequestInputs((prev) => ({ ...prev, [key]: value }))
+        }
         onSubmit={() => {
-          const err = validateRequestChangesText(requestText)
+          const trimmed = requestText.trim()
+          const allowEmpty =
+            step.supports_reassemble === true &&
+            step.input_fields.length > 0 &&
+            JSON.stringify(collectStepInputs(step.input_fields, requestInputs)) !==
+              JSON.stringify(
+                collectStepInputs(
+                  step.input_fields,
+                  parseUserInputs(
+                    detailQuery.data?.inputs?.user_inputs,
+                    step.input_fields,
+                  ),
+                ),
+              )
+          const err = validateRequestChangesText(requestText, {
+            allowEmpty,
+          })
           if (err) {
             setRequestError(err)
             return
           }
           setRequestError(null)
           if (!currentVersionId) return
-          requestMutation.mutate(requestText.trim())
+          requestMutation.mutate(trimmed || null)
         }}
       />
       <ApproveStepDialog
         open={approveOpen}
         onOpenChange={setApproveOpen}
         submitting={approveMutation.isPending}
+        placeholderCount={
+          typeof (detailQuery.data?.content?.viewer as Record<string, unknown> | undefined)
+            ?.placeholder_count === 'number'
+            ? ((detailQuery.data!.content!.viewer as Record<string, unknown>)
+                .placeholder_count as number)
+            : 0
+        }
+        numericWarningCount={
+          Array.isArray(
+            (detailQuery.data?.content?.viewer as Record<string, unknown> | undefined)
+              ?.numeric_claim_warnings,
+          )
+            ? (
+                (detailQuery.data!.content!.viewer as Record<string, unknown>)
+                  .numeric_claim_warnings as unknown[]
+              ).length
+            : 0
+        }
         onConfirm={(comment) => approveMutation.mutate(comment)}
       />
       <PromptViewerSheet

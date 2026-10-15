@@ -61,6 +61,10 @@ def _apply_default_style(doc: Document) -> None:
     h1.font.name = "Calibri"
     h1.font.size = Pt(14)
     h1.font.bold = True
+    h2 = doc.styles["Heading 2"]
+    h2.font.name = "Calibri"
+    h2.font.size = Pt(12)
+    h2.font.bold = True
 
 
 def create_export_document(meta: ExportMeta) -> Document:

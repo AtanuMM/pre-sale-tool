@@ -20,6 +20,7 @@ function step(partial: Partial<ProjectStep> & { key: string; order: number }): P
     reads_description: '',
     writes_description: '',
     context_steps: [],
+    input_fields: [],
     ...partial,
   }
 }

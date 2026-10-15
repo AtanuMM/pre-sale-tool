@@ -4,6 +4,7 @@ const ACTION_LABELS: Record<string, string> = {
   'document.downloaded': 'Document downloaded',
   'project.archived': 'Project archived',
   'project.restored': 'Project restored',
+  'project.deleted': 'Project deleted',
   'project.settings_changed': 'Project settings changed',
   'step.generate_requested': 'Step generation requested',
   'step.generated': 'Step output generated',

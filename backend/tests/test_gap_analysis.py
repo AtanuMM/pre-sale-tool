@@ -109,7 +109,10 @@ def test_gap_generate_records_scope_dependency(
 
     detail = client.get(f"/step-versions/{gap_vid}", headers=headers).json()
     assert detail["status"] == "in_review"
+    assert detail["prompt_version"] == "v2"
     assert detail["content"]["gaps"][0]["title"] == "Auth provider unknown"
+    assert detail["content"]["gaps"][0]["evidence"] == ""
+    assert detail["inputs"]["validation_notes"]["gaps_without_evidence"] == 1
 
 
 @patch("app.services.step_generation.generate_structured_result")

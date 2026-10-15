@@ -19,6 +19,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useDocumentTitle } from '@/hooks/useDocumentTitle'
+import { isPlaceholderClientName } from '@/lib/placeholderClientName'
 import {
   isReceivedAtInFuture,
   localDateTimeInputToIso,
@@ -165,6 +166,11 @@ export function NewProjectPage() {
                 disabled={submitting}
                 required
               />
+              {isPlaceholderClientName(clientName) ? (
+                <p className="text-sm text-amber-700 dark:text-amber-400" role="status">
+                  This looks like a placeholder. Use the real client name if you have it.
+                </p>
+              ) : null}
             </div>
           </CardContent>
         </Card>

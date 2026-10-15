@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict
 
@@ -39,6 +39,9 @@ class StepVersionSummaryOut(BaseModel):
     tokens_in: int | None = None
     tokens_out: int | None = None
     error: str | None = None
+    failure_code: str | None = None
+    failure_detail: str | None = None
+    generation_progress: dict[str, int] | None = None
 
 
 class ApprovalOut(BaseModel):
@@ -53,6 +56,12 @@ class StepLayoutColumnOut(BaseModel):
     header: str
 
 
+class StepLayoutGroupSourceOut(BaseModel):
+    section: str
+    key_field: str
+    intro_field: str
+
+
 class StepLayoutSectionOut(BaseModel):
     key: str
     title: str
@@ -61,6 +70,52 @@ class StepLayoutSectionOut(BaseModel):
     columns: list[StepLayoutColumnOut] = []
     record_fields: list[StepLayoutColumnOut] = []
     badge_fields: list[str] = []
+    ref_prefix: str | None = None
+    id_field: str | None = None
+    chip_fields: list[str] = []
+    group_by: str | None = None
+    group_source: StepLayoutGroupSourceOut | None = None
+    filter_fields: list[str] = []
+    stats_groups: list[StepLayoutColumnOut] = []
+    source: str | None = None
+
+
+class StepInputColumnOut(BaseModel):
+    key: str
+    label: str
+    kind: str
+    required: bool = True
+    min_value: float | None = None
+    max_value: float | None = None
+    step: float | None = None
+    default: Any = None
+    options: list[str] = []
+    max_length: int | None = None
+    min_length: int | None = None
+    pattern: str | None = None
+    visible_when: dict[str, str] | None = None
+    enabled_when: dict[str, str] | None = None
+
+
+class StepInputFieldOut(BaseModel):
+    key: str
+    label: str
+    help_text: str
+    kind: str
+    max_length: int
+    required: bool = False
+    min_value: float | None = None
+    max_value: float | None = None
+    step: float | None = None
+    default: Any = None
+    options: list[str] = []
+    min_rows: int | None = None
+    max_rows: int | None = None
+    columns: list[StepInputColumnOut] = []
+    unique_column: str | None = None
+    required_option: str | None = None
+    require_estimated_row: bool = False
+    pattern: str | None = None
 
 
 class StepContextStepOut(BaseModel):
@@ -86,6 +141,10 @@ class ProjectStepOut(BaseModel):
     reads_description: str = ""
     writes_description: str = ""
     context_steps: list[StepContextStepOut] = []
+    input_fields: list[StepInputFieldOut] = []
+    export_formats: list[str] = ["docx"]
+    generation_progress: dict[str, int] | None = None
+    supports_reassemble: bool = False
 
 
 class ProjectStepsOut(BaseModel):
@@ -113,11 +172,18 @@ class StepVersionDetailOut(BaseModel):
     generation_started_at: datetime | None
     generation_finished_at: datetime | None
     approval: ApprovalOut | None = None
+    layout: list[StepLayoutSectionOut] | None = None
 
 
 class StepVersionPromptOut(BaseModel):
     step_version_id: uuid.UUID
     assembled_prompt: str
+
+
+class GenerateStepBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    inputs: dict[str, Any] | None = None
 
 
 class GenerateStepAcceptedOut(BaseModel):

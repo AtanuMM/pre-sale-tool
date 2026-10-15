@@ -1,0 +1,50 @@
+/** Example team rows for the estimate form. Client-side only; labelled as examples. */
+
+export const TYPICAL_TEAM_ROWS: Record<string, unknown>[] = [
+  {
+    role: 'Project Manager',
+    discipline: 'management',
+    mode: 'duration_based',
+    headcount: 1,
+    hours_per_week: 40,
+    utilisation_pct: 100,
+    ai_gain_pct: 0,
+  },
+  {
+    role: 'Developer',
+    discipline: 'development',
+    mode: 'estimated',
+    headcount: 4,
+    hours_per_week: 40,
+    utilisation_pct: 100,
+    ai_gain_pct: 50,
+  },
+  {
+    role: 'QA Engineer',
+    discipline: 'qa',
+    mode: 'estimated',
+    headcount: 1,
+    hours_per_week: 40,
+    utilisation_pct: 100,
+    ai_gain_pct: 0,
+  },
+  {
+    role: 'UI/UX Designer',
+    discipline: 'design',
+    mode: 'estimated',
+    headcount: 1,
+    hours_per_week: 40,
+    utilisation_pct: 100,
+    ai_gain_pct: 0,
+  },
+  {
+    role: 'DevOps Engineer',
+    discipline: 'devops',
+    mode: 'percent_of_delivery',
+    headcount: 1,
+    hours_per_week: 40,
+    utilisation_pct: 100,
+    ai_gain_pct: 0,
+    overhead_pct: 5,
+  },
+]

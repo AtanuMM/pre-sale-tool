@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useLocation, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import {
   ArchiveIcon,
   CopyIcon,
@@ -8,6 +8,7 @@ import {
   FileIcon,
   Loader2Icon,
   RotateCcwIcon,
+  Trash2Icon,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -16,6 +17,7 @@ import { triggerBrowserDownload } from '@/api/download'
 import {
   archiveProject,
   buildFollowUpFormData,
+  deleteProject,
   createFollowUpInput,
   downloadProjectFile,
   getProjectFileText,
@@ -57,6 +59,7 @@ import { INPUT_KIND_OPTIONS, shortSha256 } from '@/lib/projectLabels'
 import {
   PERMISSION_INPUT_ADD,
   PERMISSION_PROJECT_ARCHIVE,
+  PERMISSION_PROJECT_DELETE,
   PERMISSION_SETTINGS_MANAGE,
 } from '@/lib/permissions'
 import { timelineActionLabel } from '@/lib/timelineLabels'
@@ -339,6 +342,7 @@ function FollowUpSheet({
 export function ProjectDetailPage() {
   const { projectId } = useParams<{ projectId: string }>()
   const location = useLocation()
+  const navigate = useNavigate()
   const { hasPermission } = useAuth()
   const queryClient = useQueryClient()
   const [tab, setTab] = useState<TabId>('overview')
@@ -346,6 +350,7 @@ export function ProjectDetailPage() {
   const [liveStatusMessage, setLiveStatusMessage] = useState('')
   const [followOpen, setFollowOpen] = useState(false)
   const [confirmArchive, setConfirmArchive] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const [confirmSettings, setConfirmSettings] = useState(false)
   const [settingsDraft, setSettingsDraft] = useState<'inherit' | 'allow' | 'deny'>('inherit')
 
@@ -411,6 +416,18 @@ export function ProjectDetailPage() {
     },
   })
 
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteProject(projectId!),
+    onSuccess: () => {
+      toast.success('Project deleted')
+      void queryClient.invalidateQueries({ queryKey: ['projects'] })
+      navigate('/projects')
+    },
+    onError: (err: Error) => {
+      toast.error(err instanceof ApiError ? err.displayMessage() : 'Delete failed')
+    },
+  })
+
   const settingsMutation = useMutation({
     mutationFn: (value: boolean | null) => patchProjectSettings(projectId!, value),
     onSuccess: () => {
@@ -453,6 +470,7 @@ export function ProjectDetailPage() {
     overview.project.status === 'archived' || overview.project.status === 'completed'
   const canFollowUp = hasPermission(PERMISSION_INPUT_ADD) && !locked
   const canArchive = hasPermission(PERMISSION_PROJECT_ARCHIVE)
+  const canDelete = hasPermission(PERMISSION_PROJECT_DELETE)
   const canEditSettings = hasPermission(PERMISSION_SETTINGS_MANAGE)
 
   const applySettings = () => {
@@ -480,6 +498,12 @@ export function ProjectDetailPage() {
               <Button variant="outline" size="sm" onClick={() => restoreMutation.mutate()}>
                 <RotateCcwIcon className="size-4" />
                 Restore
+              </Button>
+            ) : null}
+            {canDelete ? (
+              <Button variant="outline" size="sm" onClick={() => setConfirmDelete(true)}>
+                <Trash2Icon className="size-4" />
+                Delete
               </Button>
             ) : null}
           </div>
@@ -672,6 +696,20 @@ export function ProjectDetailPage() {
           setConfirmArchive(false)
         }}
         onCancel={() => setConfirmArchive(false)}
+      />
+      <ConfirmDialog
+        open={confirmDelete}
+        title="Delete this project?"
+        description="This permanently removes the project and its workflow data. This cannot be undone."
+        confirmLabel="Delete"
+        loading={deleteMutation.isPending}
+        onConfirm={() => {
+          deleteMutation.mutate()
+          setConfirmDelete(false)
+        }}
+        onCancel={() => {
+          if (!deleteMutation.isPending) setConfirmDelete(false)
+        }}
       />
       <ConfirmDialog
         open={confirmSettings}

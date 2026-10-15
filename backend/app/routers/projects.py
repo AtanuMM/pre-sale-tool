@@ -43,6 +43,7 @@ from app.services.project_intake import (
     add_followup_input,
     archive_project,
     create_project_with_intake,
+    delete_project,
     file_text_out,
     get_file_for_project,
     get_intake_limits,
@@ -65,6 +66,7 @@ _create = require_permission("project.create")
 _view = require_permission("project.view")
 _add_input = require_permission("input.add")
 _archive = require_permission("project.archive")
+_delete = require_permission("project.delete")
 _settings = require_permission("settings.manage")
 
 
@@ -305,6 +307,22 @@ def archive_project_endpoint(
     actor: Annotated[User, Depends(_archive)],
 ) -> ProjectSummaryOut:
     return archive_project(
+        db,
+        project_id=project_id,
+        actor=actor,
+        audit_ip=client_ip_from_request(request),
+        audit_ua=user_agent_from_request(request),
+    )
+
+
+@router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_project_endpoint(
+    project_id: uuid.UUID,
+    request: Request,
+    db: Annotated[Session, Depends(get_db)],
+    actor: Annotated[User, Depends(_delete)],
+) -> None:
+    delete_project(
         db,
         project_id=project_id,
         actor=actor,

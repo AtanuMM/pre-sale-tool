@@ -19,6 +19,8 @@ type ApproveStepDialogProps = {
   onOpenChange: (open: boolean) => void
   onConfirm: (comment: string | null) => void
   submitting: boolean
+  placeholderCount?: number
+  numericWarningCount?: number
 }
 
 export function ApproveStepDialog({
@@ -26,6 +28,8 @@ export function ApproveStepDialog({
   onOpenChange,
   onConfirm,
   submitting,
+  placeholderCount = 0,
+  numericWarningCount = 0,
 }: ApproveStepDialogProps) {
   const [comment, setComment] = useState('')
 
@@ -51,6 +55,16 @@ export function ApproveStepDialog({
             optional comment for the record.
           </DialogDescription>
         </DialogHeader>
+        {(placeholderCount > 0 || numericWarningCount > 0) && (
+          <p className="text-sm text-muted-foreground">
+            This version has {placeholderCount} open placeholder
+            {placeholderCount === 1 ? '' : 's'}
+            {numericWarningCount > 0
+              ? ` and ${numericWarningCount} “Check this figure” warning${numericWarningCount === 1 ? '' : 's'}`
+              : ''}
+            . You can still approve.
+          </p>
+        )}
         <div className="space-y-2">
           <Label htmlFor="approve-comment">Comment (optional)</Label>
           <Textarea

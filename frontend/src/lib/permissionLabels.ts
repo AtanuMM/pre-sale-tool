@@ -25,6 +25,7 @@ export const PERMISSION_CODE_LABELS: Record<string, string> = {
   'project.create': 'Create projects',
   'project.view': 'View projects',
   'project.archive': 'Archive projects',
+  'project.delete': 'Delete projects',
   'input.add': 'Add intake inputs',
   'step.generate': 'Generate steps',
   'step.request_changes': 'Request changes',

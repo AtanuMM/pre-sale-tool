@@ -57,4 +57,42 @@ describe('NewProjectPage', () => {
     await user.click(screen.getByRole('button', { name: /Create project/i }))
     expect(await screen.findByText(/body or at least one attachment/i)).toBeInTheDocument()
   })
+
+  it('warns on placeholder client names without blocking submit', async () => {
+    const user = userEvent.setup()
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={qc}>
+        <MemoryRouter>
+          <TestAuthProvider
+          auth={{
+            status: 'authenticated',
+            user: {
+              id: '1',
+              email: 'a@b.com',
+              full_name: 'A',
+              is_active: true,
+              permissions: [PERMISSION_PROJECT_CREATE],
+            },
+            login: async () => {},
+            logout: async () => {},
+            hasPermission: (c) => c === PERMISSION_PROJECT_CREATE,
+            setUser: () => {},
+          }}
+        >
+            <NewProjectPage />
+          </TestAuthProvider>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+
+    await screen.findByLabelText(/Client name/i)
+    await user.type(screen.getByLabelText(/Client name/i), 'Unknown-Indian-Client')
+    expect(
+      screen.getByText(/looks like a placeholder/i),
+    ).toBeInTheDocument()
+    await user.clear(screen.getByLabelText(/Client name/i))
+    await user.type(screen.getByLabelText(/Client name/i), 'Acme Corp')
+    expect(screen.queryByText(/looks like a placeholder/i)).not.toBeInTheDocument()
+  })
 })

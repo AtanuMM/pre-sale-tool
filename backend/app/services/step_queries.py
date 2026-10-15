@@ -8,6 +8,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.documents.layouts import layout_for_step
 from app.models.auth import User
 from app.models.steps import Approval, StepVersion
 from app.schemas.steps import (
@@ -26,6 +27,7 @@ from app.services.step_state import (
 )
 from app.services.step_version_context import compute_step_action_flags
 from app.steps.definitions import get_step, ordered_steps
+from app.steps.input_fields import input_fields_to_api
 from app.steps.layout_config import layout_to_api
 
 
@@ -62,6 +64,22 @@ def version_to_summary(session: Session, version: StepVersion) -> StepVersionSum
     creator = (
         session.get(User, version.created_by) if version.created_by else None
     )
+    failure_code: str | None = None
+    failure_detail: str | None = None
+    failed_progress: dict[str, int] | None = None
+    if version.status == "failed" and isinstance(version.inputs, dict):
+        raw_code = version.inputs.get("failure_code")
+        if isinstance(raw_code, str) and raw_code.strip():
+            failure_code = raw_code.strip()
+        raw_detail = version.inputs.get("failure_detail")
+        if isinstance(raw_detail, str) and raw_detail.strip():
+            failure_detail = raw_detail.strip()[:180]
+        raw_progress = version.inputs.get("generation_progress")
+        if isinstance(raw_progress, dict):
+            done = raw_progress.get("done")
+            total = raw_progress.get("total")
+            if isinstance(done, int) and isinstance(total, int):
+                failed_progress = {"done": done, "total": total}
     return StepVersionSummaryOut(
         id=version.id,
         version_no=version.version_no,
@@ -72,6 +90,9 @@ def version_to_summary(session: Session, version: StepVersion) -> StepVersionSum
         tokens_in=version.tokens_in,
         tokens_out=version.tokens_out,
         error=version.error,
+        failure_code=failure_code,
+        failure_detail=failure_detail,
+        generation_progress=failed_progress,
     )
 
 
@@ -99,6 +120,18 @@ def get_project_steps(
         )
         latest_row = _latest_version_row(session, project_id, defn.key)
         latest = version_to_summary(session, latest_row) if latest_row else None
+        progress = None
+        if (
+            latest_row is not None
+            and latest_row.status in ("queued", "generating")
+            and isinstance(latest_row.inputs, dict)
+        ):
+            raw_progress = latest_row.inputs.get("generation_progress")
+            if isinstance(raw_progress, dict):
+                done = raw_progress.get("done")
+                total = raw_progress.get("total")
+                if isinstance(done, int) and isinstance(total, int):
+                    progress = {"done": done, "total": total}
         current_id, can_req, can_app, approve_blocked = compute_step_action_flags(
             session,
             project=project,
@@ -130,6 +163,10 @@ def get_project_steps(
                 reads_description=defn.reads_description,
                 writes_description=defn.writes_description,
                 context_steps=context_out,
+                input_fields=input_fields_to_api(defn.input_fields),
+                export_formats=list(defn.export_formats),
+                generation_progress=progress,
+                supports_reassemble=defn.supports_reassemble,
             )
         )
     return ProjectStepsOut(steps=steps_out)
@@ -202,6 +239,13 @@ def get_step_version_detail(session: Session, version_id: uuid.UUID) -> StepVers
         generation_started_at=version.generation_started_at,
         generation_finished_at=version.generation_finished_at,
         approval=approval_out,
+        layout=layout_to_api(
+            layout_for_step(
+                version.step_key,
+                version.content if isinstance(version.content, dict) else None,
+            )
+            or ()
+        ),
     )
 
 

@@ -148,6 +148,7 @@ def _generate_content_once(
     prompt: str,
     schema: type[T],
     system: str | None,
+    max_output_tokens: int | None = None,
 ) -> types.GenerateContentResponse:
     client = _get_client()
     config_kwargs: dict[str, object] = {
@@ -158,6 +159,8 @@ def _generate_content_once(
     config_kwargs["response_json_schema"] = json_schema
     if system is not None:
         config_kwargs["system_instruction"] = system
+    if max_output_tokens is not None:
+        config_kwargs["max_output_tokens"] = max_output_tokens
     config = types.GenerateContentConfig(**config_kwargs)
     return client.models.generate_content(
         model=model_id,
@@ -173,6 +176,7 @@ def _call_with_api_retries(
     schema: type[T],
     system: str | None,
     deadline: float | None,
+    max_output_tokens: int | None = None,
 ) -> types.GenerateContentResponse:
     total_wait = 0.0
     last_retryable: ClientError | ServerError | None = None
@@ -187,6 +191,7 @@ def _call_with_api_retries(
                 prompt=prompt,
                 schema=schema,
                 system=system,
+                max_output_tokens=max_output_tokens,
             )
         except (ClientError, ServerError) as exc:
             if isinstance(exc, ClientError) and exc.code != 429:
@@ -243,6 +248,7 @@ def generate_structured_result(
     system: str | None = None,
     validation_max_attempts: int = 2,
     deadline: float | None = None,
+    max_output_tokens: int | None = None,
 ) -> StructuredGenerationResult[T]:
     if validation_max_attempts < 1:
         raise ValueError("validation_max_attempts must be at least 1")
@@ -275,6 +281,7 @@ def generate_structured_result(
             schema=schema,
             system=system,
             deadline=deadline,
+            max_output_tokens=max_output_tokens,
         )
         in_count, out_count = _extract_usage(response)
         tokens_in = _sum_tokens(tokens_in, in_count)
@@ -321,6 +328,7 @@ def generate_structured(
     system: str | None = None,
     validation_max_attempts: int = 2,
     deadline: float | None = None,
+    max_output_tokens: int | None = None,
 ) -> T:
     return generate_structured_result(
         prompt,
@@ -328,4 +336,5 @@ def generate_structured(
         system=system,
         validation_max_attempts=validation_max_attempts,
         deadline=deadline,
+        max_output_tokens=max_output_tokens,
     ).data

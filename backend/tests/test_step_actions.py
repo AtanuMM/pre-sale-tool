@@ -44,6 +44,7 @@ def _steps_env(monkeypatch: pytest.MonkeyPatch) -> None:
     )
     monkeypatch.setenv("APP_ENV", "test")
     monkeypatch.setenv("GENERATION_TIMEOUT_SECONDS", "300")
+    monkeypatch.setenv("ESTIMATE_GENERATION_TIMEOUT_SECONDS", "30")
     get_settings.cache_clear()
     reset_generation_limits_for_tests()
     yield
