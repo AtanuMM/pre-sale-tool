@@ -14,6 +14,7 @@ from app.steps.layouts_registry import (
     GAP_ANALYSIS_LAYOUT,
     SCOPE_ANALYSIS_LAYOUT,
     SOW_LAYOUT,
+    FRS_LAYOUT,
     SPRINT_PLAN_LAYOUT,
     SRS_LAYOUT,
 )
@@ -22,6 +23,7 @@ from app.steps.postprocess.estimate_v2 import postprocess_estimate_v2
 from app.steps.postprocess.feature_list import postprocess_feature_list
 from app.steps.postprocess.gap_analysis import postprocess_gap_analysis
 from app.steps.postprocess.sow import postprocess_sow
+from app.steps.postprocess.frs import postprocess_frs
 from app.steps.postprocess.sprint_plan import postprocess_sprint_plan
 from app.steps.postprocess.srs import postprocess_srs
 from app.steps.schema_gemini import (
@@ -33,9 +35,11 @@ from app.steps.schemas.feature_list import FeatureListOutput, FeatureListStored
 from app.steps.schemas.gap_analysis import GapAnalysisOutput
 from app.steps.schemas.scope_analysis import ScopeAnalysisOutput
 from app.steps.schemas.sow import SowNarrativeOutput, SowStored
+from app.steps.schemas.frs import FrsPlanningPassAOutput, FrsStored
 from app.steps.schemas.sprint_plan import SprintPlanPlanningPassAOutput, SprintPlanStored
 from app.steps.schemas.srs import SrsPlanningPassAOutput, SrsStored
 from app.steps.sow_inputs import SOW_INPUT_FIELDS
+from app.steps.frs_inputs import FRS_INPUT_FIELDS
 from app.steps.sprint_plan_inputs import SPRINT_PLAN_INPUT_FIELDS
 from app.steps.srs_inputs import SRS_INPUT_FIELDS
 
@@ -286,15 +290,35 @@ _STEPS: tuple[StepDefinition, ...] = (
         title="Functional Requirements Specification",
         order=8,
         depends_on="sprint_plan",
-        output_schema=None,
+        output_schema=FrsPlanningPassAOutput,
         extra_inputs_schema=None,
-        prompt_version=None,
-        implemented=False,
-        context_steps=(),
-        layout=(),
+        prompt_version="v1",
+        implemented=True,
+        context_steps=(
+            "scope_analysis",
+            "gap_analysis",
+            "feature_list",
+            "estimate",
+            "sow",
+            "srs",
+            "sprint_plan",
+        ),
+        layout=FRS_LAYOUT,
         soft_list_caps=(),
-        reads_description="",
-        writes_description="",
+        reads_description=(
+            "Approved Scope Analysis, Gap Analysis, Feature List, Estimate (client-safe), "
+            "Statement of Work, Software Requirements Specification, Sprint Plan, plus FRS inputs."
+        ),
+        writes_description=(
+            "Client-facing functional specifications with code-owned ids, traceability, "
+            "catalogs, matrices, and exports."
+        ),
+        uses_scope_revise_prompt=False,
+        stored_schema=FrsStored,
+        postprocess=postprocess_frs,
+        input_fields=FRS_INPUT_FIELDS,
+        export_formats=("docx", "xlsx", "csv"),
+        max_output_tokens=65_536,
     ),
 )
 

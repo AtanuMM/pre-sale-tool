@@ -13,6 +13,11 @@ vi.mock('@/api/users', () => ({
   createUser: vi.fn(),
   updateUser: vi.fn(),
   resetUserPassword: vi.fn(),
+  deleteUser: vi.fn(),
+}))
+
+vi.mock('@/auth/AuthContext', () => ({
+  useAuth: () => ({ user: { id: 'current-admin' } }),
 }))
 
 vi.mock('@/api/roles', () => ({

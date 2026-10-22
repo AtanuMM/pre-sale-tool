@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { FilterSelect } from '@/components/workflow/FormSelect'
 import { PlainTextBlock } from '@/components/projects/PlainTextBlock'
 import { copyTextToClipboard } from '@/lib/copyToClipboard'
 import { formatCopyableSectionText } from '@/lib/formatCopyableSection'
@@ -172,6 +173,33 @@ function renderSection(
   if (section.kind === 'health_panel') {
     const health = raw as Record<string, unknown> | null
     if (!health) return <p className="text-sm text-muted-foreground">No health data.</p>
+    const rows = health.health_rows
+    if (Array.isArray(rows) && rows.length > 0) {
+      return (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[480px] border-collapse text-sm">
+            <thead>
+              <tr className="border-b border-border text-left">
+                <th className="p-2">Check</th>
+                <th className="p-2">Value</th>
+                <th className="p-2">Threshold</th>
+                <th className="p-2">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(rows as Record<string, unknown>[]).map((row, index) => (
+                <tr key={index} className="border-b border-border/60">
+                  <td className="p-2">{cellText(row.label)}</td>
+                  <td className="p-2">{cellText(row.value)}</td>
+                  <td className="p-2">{cellText(row.threshold)}</td>
+                  <td className="p-2">{cellText(row.status)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )
+    }
     return (
       <div className="grid gap-2 text-sm sm:grid-cols-2">
         <p>Requirements per feature: <strong>{String(health.requirements_per_feature ?? '—')}</strong></p>
@@ -480,21 +508,15 @@ function ComputedTableSection({
                 <label htmlFor={selectId} className="text-xs font-medium">
                   {humanizeFieldLabel(field)}
                 </label>
-                <select
+                <FilterSelect
                   id={selectId}
-                  className="block h-9 min-w-[8rem] rounded-md border border-input bg-transparent px-2 text-sm"
                   value={filters[field] ?? ''}
-                  onChange={(event) =>
-                    setFilters((prev) => ({ ...prev, [field]: event.target.value }))
+                  options={options}
+                  triggerClassName="h-9"
+                  onChange={(next) =>
+                    setFilters((prev) => ({ ...prev, [field]: next }))
                   }
-                >
-                  <option value="">All</option>
-                  {options.map((option) => (
-                    <option key={option} value={option}>
-                      {prettyToken(option)}
-                    </option>
-                  ))}
-                </select>
+                />
               </div>
             )
           })}
@@ -600,21 +622,15 @@ function RecordsSection({
                 <label htmlFor={selectId} className="text-xs font-medium">
                   {humanizeFieldLabel(field)}
                 </label>
-                <select
+                <FilterSelect
                   id={selectId}
-                  className="block h-9 min-w-[8rem] rounded-md border border-input bg-transparent px-2 text-sm"
                   value={filters[field] ?? ''}
-                  onChange={(event) =>
-                    setFilters((prev) => ({ ...prev, [field]: event.target.value }))
+                  options={options}
+                  triggerClassName="h-9"
+                  onChange={(next) =>
+                    setFilters((prev) => ({ ...prev, [field]: next }))
                   }
-                >
-                  <option value="">All</option>
-                  {options.map((option) => (
-                    <option key={option} value={option}>
-                      {prettyToken(option)}
-                    </option>
-                  ))}
-                </select>
+                />
               </div>
             )
           })}

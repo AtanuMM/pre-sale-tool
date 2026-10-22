@@ -21,6 +21,7 @@ class AuditAction:
     USER_CREATED = "user.created"
     USER_UPDATED = "user.updated"
     USER_DEACTIVATED = "user.deactivated"
+    USER_DELETED = "user.deleted"
     USER_PASSWORD_RESET = "user.password_reset"
     ROLE_CREATED = "role.created"
     ROLE_CHANGED = "role.changed"
@@ -47,6 +48,8 @@ class AuditAction:
     PROJECT_ARCHIVED = "project.archived"
     PROJECT_RESTORED = "project.restored"
     PROJECT_DELETED = "project.deleted"
+    PROJECT_COMPLETED = "project.completed"
+    PACKAGE_DOWNLOADED = "package.downloaded"
     AUDIT_EXPORTED = "audit.exported"
 
 

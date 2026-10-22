@@ -190,6 +190,13 @@ export function deleteProject(projectId: string): Promise<void> {
   return apiRequest<void>(`/projects/${projectId}`, { method: 'DELETE' })
 }
 
+export function downloadProjectPackage(
+  projectId: string,
+  fallbackFilename: string,
+): Promise<{ blob: Blob; filename: string }> {
+  return apiFetchBlob(`/projects/${projectId}/package`, fallbackFilename)
+}
+
 export function patchProjectSettings(
   projectId: string,
   allow_self_approval: boolean | null,

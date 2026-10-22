@@ -67,6 +67,7 @@ _view = require_permission("project.view")
 _add_input = require_permission("input.add")
 _archive = require_permission("project.archive")
 _delete = require_permission("project.delete")
+_download = require_permission("document.download")
 _settings = require_permission("settings.manage")
 
 
@@ -328,6 +329,42 @@ def delete_project_endpoint(
         actor=actor,
         audit_ip=client_ip_from_request(request),
         audit_ua=user_agent_from_request(request),
+    )
+
+
+@router.get("/{project_id}/package")
+def download_project_package(
+    project_id: uuid.UUID,
+    request: Request,
+    db: Annotated[Session, Depends(get_db)],
+    _view: Annotated[User, Depends(_view)],
+    actor: Annotated[User, Depends(_download)],
+):
+    from app.services.project_package import build_project_package
+
+    payload, filename = build_project_package(db, project_id)
+    record_audit(
+        db,
+        action=AuditAction.PACKAGE_DOWNLOADED,
+        actor=actor,
+        entity_type="project",
+        entity_id=project_id,
+        project_id=project_id,
+        metadata={
+            "project_id": str(project_id),
+            "byte_count": len(payload),
+        },
+        ip_address=client_ip_from_request(request),
+        user_agent=user_agent_from_request(request),
+    )
+    db.commit()
+    return StreamingResponse(
+        iter([payload]),
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "X-Content-Type-Options": "nosniff",
+        },
     )
 
 

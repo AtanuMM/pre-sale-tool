@@ -658,6 +658,7 @@ export function StepPanel({
               ).length
             : 0
         }
+        requiresProjectCompletionAck={step.key === 'frs'}
         onConfirm={(comment) => approveMutation.mutate(comment)}
       />
       <PromptViewerSheet

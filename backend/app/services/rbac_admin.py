@@ -6,6 +6,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.auth import Role, User, UserRole
+from app.models.steps import Approval, StepVersion
 from app.seed import ADMIN_ROLE_NAME
 
 
@@ -84,3 +85,22 @@ def resolve_roles_by_ids(session: Session, role_ids: list[uuid.UUID]) -> list[Ro
         missing = set(role_ids) - {role.id for role in roles}
         raise ValueError(f"Unknown role ids: {missing}")
     return roles
+
+
+def user_delete_block_reason(session: Session, user: User) -> str | None:
+    """Return a human-readable reason if the user cannot be hard-deleted."""
+    created = session.scalar(
+        select(func.count())
+        .select_from(StepVersion)
+        .where(StepVersion.created_by == user.id)
+    )
+    if created:
+        return "This user created workflow versions. Deactivate the account instead."
+    approved = session.scalar(
+        select(func.count())
+        .select_from(Approval)
+        .where(Approval.approved_by == user.id)
+    )
+    if approved:
+        return "This user approved workflow steps. Deactivate the account instead."
+    return None

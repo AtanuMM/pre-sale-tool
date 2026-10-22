@@ -31,6 +31,7 @@ def test_scope_gap_feature_list_estimate_sow_and_srs_implemented() -> None:
         "sow",
         "srs",
         "sprint_plan",
+        "frs",
     ]
     feature = get_step("feature_list")
     assert feature.context_steps == ("scope_analysis", "gap_analysis")
@@ -65,3 +66,8 @@ def test_scope_gap_feature_list_estimate_sow_and_srs_implemented() -> None:
     assert sprint.export_formats == ("docx", "xlsx", "csv")
     assert sprint.supports_reassemble is True
     assert "sprint_length_weeks" in [f.key for f in sprint.input_fields]
+    frs = get_step("frs")
+    assert frs.implemented is True
+    assert frs.depends_on == "sprint_plan"
+    assert frs.export_formats == ("docx", "xlsx", "csv")
+    assert "detail_level" in [f.key for f in frs.input_fields]

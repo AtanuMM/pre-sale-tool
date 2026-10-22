@@ -4,7 +4,13 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { TYPICAL_TEAM_ROWS } from '@/lib/typicalTeam'
-import { prettyToken, type StepInputColumn, type StepInputField, type StepInputValue } from '@/lib/stepLayoutTypes'
+import { FormSelect } from '@/components/workflow/FormSelect'
+import {
+  prettyToken,
+  type StepInputColumn,
+  type StepInputField,
+  type StepInputValue,
+} from '@/lib/stepLayoutTypes'
 
 type StepInputFieldsProps = {
   fields: StepInputField[]
@@ -127,19 +133,13 @@ export function StepInputFields({
           return (
             <div key={field.key} className="space-y-2">
               <Label htmlFor={field.key}>{field.label}</Label>
-              <select
+              <FormSelect
                 id={field.key}
-                className="h-9 w-full rounded-md border border-input bg-transparent px-2 text-sm"
-                disabled={disabled}
                 value={value}
-                onChange={(event) => onChange(field.key, event.target.value)}
-              >
-                {(field.options ?? []).map((opt) => (
-                  <option key={opt} value={opt}>
-                    {prettyToken(opt)}
-                  </option>
-                ))}
-              </select>
+                disabled={disabled}
+                options={field.options ?? []}
+                onChange={(next) => onChange(field.key, next)}
+              />
               <p className="text-xs text-muted-foreground">{field.help_text}</p>
             </div>
           )
@@ -233,14 +233,14 @@ export function StepInputFields({
                           if (col.kind === 'select') {
                             return (
                               <td key={col.key} className="py-1 pr-2">
-                                <select
+                                <FormSelect
                                   id={cellId}
                                   aria-label={`${col.label} row ${index + 1}`}
-                                  className="h-8 w-full min-w-[8rem] rounded-md border border-input bg-transparent px-2 text-sm"
+                                  triggerClassName="h-8 min-w-[8rem]"
                                   disabled={disabled || !columnEnabled(col, row)}
                                   value={typeof raw === 'string' ? raw : String(col.default ?? '')}
-                                  onChange={(event) => {
-                                    const nextValue = event.target.value
+                                  options={col.options ?? []}
+                                  onChange={(nextValue) => {
                                     const next = rows.map((item, i) => {
                                       if (i !== index) return item
                                       const updated = { ...item, [col.key]: nextValue }
@@ -251,13 +251,7 @@ export function StepInputFields({
                                     })
                                     onChange(field.key, next)
                                   }}
-                                >
-                                  {(col.options ?? []).map((opt) => (
-                                    <option key={opt} value={opt}>
-                                      {prettyToken(opt)}
-                                    </option>
-                                  ))}
-                                </select>
+                                />
                               </td>
                             )
                           }

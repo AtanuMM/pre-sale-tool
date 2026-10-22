@@ -9,6 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 
@@ -21,6 +22,7 @@ type ApproveStepDialogProps = {
   submitting: boolean
   placeholderCount?: number
   numericWarningCount?: number
+  requiresProjectCompletionAck?: boolean
 }
 
 export function ApproveStepDialog({
@@ -30,12 +32,15 @@ export function ApproveStepDialog({
   submitting,
   placeholderCount = 0,
   numericWarningCount = 0,
+  requiresProjectCompletionAck = false,
 }: ApproveStepDialogProps) {
   const [comment, setComment] = useState('')
+  const [completionAck, setCompletionAck] = useState(false)
 
   const handleOpenChange = (v: boolean) => {
     if (!v && !submitting) {
       setComment('')
+      setCompletionAck(false)
       onOpenChange(false)
     }
   }
@@ -55,6 +60,21 @@ export function ApproveStepDialog({
             optional comment for the record.
           </DialogDescription>
         </DialogHeader>
+        {requiresProjectCompletionAck ? (
+          <div className="space-y-3 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+            <p>
+              Approving this specification completes the project. All documents become read-only.
+            </p>
+            <label className="flex cursor-pointer items-start gap-2">
+              <Checkbox
+                checked={completionAck}
+                onCheckedChange={(v) => setCompletionAck(v === true)}
+                disabled={submitting}
+              />
+              <span>I understand the project will be marked completed.</span>
+            </label>
+          </div>
+        ) : null}
         {(placeholderCount > 0 || numericWarningCount > 0) && (
           <p className="text-sm text-muted-foreground">
             This version has {placeholderCount} open placeholder
@@ -80,7 +100,11 @@ export function ApproveStepDialog({
           <Button type="button" variant="outline" onClick={() => handleOpenChange(false)} disabled={submitting}>
             Cancel
           </Button>
-          <Button type="button" onClick={handleConfirm} disabled={submitting}>
+          <Button
+            type="button"
+            onClick={handleConfirm}
+            disabled={submitting || (requiresProjectCompletionAck && !completionAck)}
+          >
             {submitting ? 'Approving…' : 'Approve'}
           </Button>
         </DialogFooter>

@@ -33,6 +33,7 @@ from app.services.rbac_admin import (
     replace_user_roles,
     resolve_roles_by_ids,
     role_names,
+    user_delete_block_reason,
     would_remove_admin_role,
 )
 
@@ -239,4 +240,52 @@ def reset_password(
         ip_address=client_ip_from_request(request),
         user_agent=user_agent_from_request(request),
     )
+    db.commit()
+
+
+@router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_user(
+    user_id: uuid.UUID,
+    request: Request,
+    db: Annotated[Session, Depends(get_db)],
+    actor: Annotated[User, Depends(_manage)],
+) -> None:
+    user = load_user_admin_view(db, user_id)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    if actor.id == user.id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="You cannot delete your own account",
+        )
+
+    if user.is_active and is_sole_active_admin(db, user):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot delete the last active Admin user",
+        )
+
+    block = user_delete_block_reason(db, user)
+    if block:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=block)
+
+    snapshot = {
+        "email": user.email,
+        "full_name": user.full_name,
+        "is_active": user.is_active,
+        "roles": role_names(user),
+    }
+    revoke_all_for_user(db, user.id)
+    record_audit(
+        db,
+        action=AuditAction.USER_DELETED,
+        actor=actor,
+        entity_type="user",
+        entity_id=user.id,
+        metadata={"deleted": snapshot},
+        ip_address=client_ip_from_request(request),
+        user_agent=user_agent_from_request(request),
+    )
+    db.delete(user)
     db.commit()

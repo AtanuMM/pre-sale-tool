@@ -7,6 +7,7 @@ import type { ProjectStep } from '@/api/steps'
 import { GenericStepViewer } from '@/components/workflow/GenericStepViewer'
 import { StepPanel } from '@/components/workflow/StepPanel'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { pickSelectOption } from '@/test/radixSelect'
 import { TestAuthProvider } from '@/test/renderWithAuth'
 import { PERMISSION_STEP_GENERATE } from '@/lib/permissions'
 import type { StepLayoutSection } from '@/lib/stepLayoutTypes'
@@ -208,7 +209,7 @@ describe('Feature list viewer', () => {
     const user = userEvent.setup()
     render(<GenericStepViewer layout={featureLayout} content={featureContent} />)
     const priority = screen.getByLabelText('Priority')
-    await user.selectOptions(priority, 'must')
+    await pickSelectOption(user, priority, 'must')
     expect(screen.getByText('<b>Sign in</b>')).toBeInTheDocument()
     expect(screen.queryByText('Order list')).not.toBeInTheDocument()
     expect(screen.getByText(/Showing 1 of 2/)).toBeInTheDocument()

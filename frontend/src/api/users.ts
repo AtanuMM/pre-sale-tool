@@ -43,3 +43,7 @@ export function resetUserPassword(
     body: JSON.stringify(body),
   })
 }
+
+export function deleteUser(userId: string): Promise<void> {
+  return apiRequest<void>(`/users/${userId}`, { method: 'DELETE' })
+}

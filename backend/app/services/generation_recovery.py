@@ -29,6 +29,8 @@ def _timeout_seconds_for_step(step_key: str) -> float:
         return settings.SRS_GENERATION_TIMEOUT_SECONDS
     if step_key == "sprint_plan":
         return settings.SPRINT_PLAN_GENERATION_TIMEOUT_SECONDS
+    if step_key == "frs":
+        return settings.FRS_GENERATION_TIMEOUT_SECONDS
     return settings.GENERATION_TIMEOUT_SECONDS
 
 

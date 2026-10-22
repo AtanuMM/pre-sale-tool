@@ -9,6 +9,7 @@ import { GenericStepViewer } from '@/components/workflow/GenericStepViewer'
 import { StepInputFields } from '@/components/workflow/StepInputFields'
 import { StepPanel } from '@/components/workflow/StepPanel'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { pickSelectOption } from '@/test/radixSelect'
 import { TestAuthProvider } from '@/test/renderWithAuth'
 import {
   PERMISSION_DOCUMENT_DOWNLOAD,
@@ -221,7 +222,7 @@ describe('Estimate viewer', () => {
     expect(screen.getByText(/Features not estimated: 1/)).toBeInTheDocument()
     expect(screen.getByText('<b>Sign in</b>')).toBeInTheDocument()
     const phase = screen.getByLabelText('Phase')
-    await user.selectOptions(phase, 'mvp')
+    await pickSelectOption(user, phase, 'mvp')
     expect(screen.getByText('<b>Sign in</b>')).toBeInTheDocument()
     expect(screen.queryByText('Orders')).not.toBeInTheDocument()
   })
@@ -386,7 +387,7 @@ describe('Estimate v2 form', () => {
     const gain = screen.getByLabelText('AI gain % row 1')
     expect(gain).toBeDisabled()
     expect(screen.getByText(/AI gain applies only to development roles/i)).toBeInTheDocument()
-    await user.selectOptions(screen.getByLabelText('Discipline row 1'), 'development')
+    await pickSelectOption(user, screen.getByLabelText('Discipline row 1'), 'development')
     expect(screen.getByLabelText('AI gain % row 1')).not.toBeDisabled()
   })
 })

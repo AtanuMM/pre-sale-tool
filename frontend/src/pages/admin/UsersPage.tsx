@@ -10,7 +10,8 @@ import { toast } from 'sonner'
 
 import { ApiError } from '@/api/errors'
 import { listRoles } from '@/api/roles'
-import { createUser, listUsers, resetUserPassword, updateUser } from '@/api/users'
+import { createUser, deleteUser, listUsers, resetUserPassword, updateUser } from '@/api/users'
+import { useAuth } from '@/auth/AuthContext'
 import type { UserAdmin } from '@/api/types'
 import { ConfirmDialog } from '@/components/layout/ConfirmDialog'
 import {
@@ -61,6 +62,7 @@ const MIN_PASSWORD = 12
 const PAGE_SIZE = 20
 
 export function UsersPage() {
+  const { user: currentUser } = useAuth()
   const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<UserStatusFilter>('all')
@@ -75,6 +77,7 @@ export function UsersPage() {
   const [sheetMode, setSheetMode] = useState<'create' | 'edit' | null>(null)
   const [editUser, setEditUser] = useState<UserAdmin | null>(null)
   const [confirmDeactivate, setConfirmDeactivate] = useState<UserAdmin | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState<UserAdmin | null>(null)
   const [confirmReset, setConfirmReset] = useState<UserAdmin | null>(null)
   const [resetPassword, setResetPassword] = useState('')
 
@@ -159,6 +162,18 @@ export function UsersPage() {
     },
     onError: (err: unknown) => {
       toast.error(err instanceof ApiError ? err.displayMessage() : 'Could not reactivate user.')
+    },
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (user: UserAdmin) => deleteUser(user.id),
+    onSuccess: () => {
+      invalidate()
+      setConfirmDelete(null)
+      toast.success('User deleted.')
+    },
+    onError: (err: unknown) => {
+      toast.error(err instanceof ApiError ? err.displayMessage() : 'Could not delete user.')
     },
   })
 
@@ -361,6 +376,14 @@ export function UsersPage() {
                           Reactivate
                         </DropdownMenuItem>
                       )}
+                      {currentUser?.id !== user.id ? (
+                        <DropdownMenuItem
+                          className="text-destructive focus:text-destructive"
+                          onClick={() => setConfirmDelete(user)}
+                        >
+                          Delete
+                        </DropdownMenuItem>
+                      ) : null}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </TableCell>
@@ -494,6 +517,21 @@ export function UsersPage() {
             </fieldset>
         </div>
       </FormSheet>
+
+      <ConfirmDialog
+        open={confirmDelete !== null}
+        title="Delete user"
+        description={
+          confirmDelete
+            ? `Permanently delete ${confirmDelete.email}? This cannot be undone. Users with project workflow history must be deactivated instead.`
+            : ''
+        }
+        confirmLabel="Delete"
+        destructive
+        loading={deleteMutation.isPending}
+        onCancel={() => setConfirmDelete(null)}
+        onConfirm={() => confirmDelete && deleteMutation.mutate(confirmDelete)}
+      />
 
       <ConfirmDialog
         open={confirmDeactivate !== null}

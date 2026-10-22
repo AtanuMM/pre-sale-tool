@@ -265,7 +265,7 @@ def test_steps_list_no_content(client: TestClient, seeded_session) -> None:
     assert payload["steps"][1]["status"] == "locked"
 
 
-def test_unimplemented_step_409(client: TestClient, seeded_session) -> None:
+def test_frs_generate_locked_without_sprint_plan_409(client: TestClient, seeded_session) -> None:
     _, settings = seeded_session
     headers = _auth(client, settings)
     created = _create_project_multipart(client, headers)

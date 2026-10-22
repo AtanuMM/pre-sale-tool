@@ -105,6 +105,10 @@ class Settings(BaseSettings):
     SPRINT_PLAN_MODULE_BATCH_SIZE: int = 2
     SPRINT_PLAN_GOALS_BATCH_SIZE: int = 25
     SPRINT_PLAN_MAX_OUTPUT_TOKENS: int = 65_536
+    FRS_GENERATION_TIMEOUT_SECONDS: float = 2400.0
+    FRS_MODULE_BATCH_SIZE: int = 5
+    FRS_MAX_OUTPUT_TOKENS: int = 65_536
+    PROJECT_PACKAGE_MAX_BYTES: int = 200_000_000
 
     @field_validator("ALLOWED_ORIGINS", mode="before")
     @classmethod

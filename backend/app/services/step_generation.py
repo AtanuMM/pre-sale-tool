@@ -308,14 +308,6 @@ def request_step_generation(
     if not defn.implemented:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=ERR_NOT_IMPLEMENTED)
 
-    try:
-        cleaned_inputs = validate_step_inputs(defn.input_fields, raw_inputs)
-    except StepInputValidationError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail=[{"type": "value_error", **item} for item in exc.errors],
-        ) from exc
-
     rows = session.scalars(
         select(StepVersion).where(StepVersion.project_id == project_id)
     ).all()
@@ -330,6 +322,14 @@ def request_step_generation(
             status_code=status.HTTP_409_CONFLICT,
             detail=_generate_reject_reason(step_key, grouped, project.status),
         )
+
+    try:
+        cleaned_inputs = validate_step_inputs(defn.input_fields, raw_inputs)
+    except StepInputValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=[{"type": "value_error", **item} for item in exc.errors],
+        ) from exc
 
     if not project_has_readable_content(session, project_id):
         raise HTTPException(
@@ -419,6 +419,8 @@ def run_generation(version_id: uuid.UUID) -> None:
             timeout = settings.SRS_GENERATION_TIMEOUT_SECONDS
         elif version is not None and version.step_key == "sprint_plan":
             timeout = settings.SPRINT_PLAN_GENERATION_TIMEOUT_SECONDS
+        elif version is not None and version.step_key == "frs":
+            timeout = settings.FRS_GENERATION_TIMEOUT_SECONDS
     sem = _acquire_concurrency_slot(settings.MAX_CONCURRENT_GENERATIONS)
     future = _GEN_EXECUTOR.submit(_generation_worker, version_id)
     try:
@@ -488,7 +490,7 @@ def _generation_worker(version_id: uuid.UUID) -> None:
                 if base_row is not None:
                     previous_prompt = base_row.assembled_prompt
             version_no = version.version_no
-            if step_key in ("estimate", "srs", "sprint_plan"):
+            if step_key in ("estimate", "srs", "sprint_plan", "frs"):
                 inputs_meta = {**existing_inputs}
                 if user_inputs:
                     inputs_meta["user_inputs"] = user_inputs
@@ -545,6 +547,8 @@ def _generation_worker(version_id: uuid.UUID) -> None:
             timeout = settings.SRS_GENERATION_TIMEOUT_SECONDS
         elif step_key == "sprint_plan":
             timeout = settings.SPRINT_PLAN_GENERATION_TIMEOUT_SECONDS
+        elif step_key == "frs":
+            timeout = settings.FRS_GENERATION_TIMEOUT_SECONDS
         deadline = time.monotonic() + timeout
         if step_key == "sprint_plan":
             from app.services.sprint_plan_generation import run_sprint_plan
@@ -609,6 +613,43 @@ def _generation_worker(version_id: uuid.UUID) -> None:
                 )
             stored, extra_meta, assembled_prompt, prompt_version, tokens_in, tokens_out, api_attempts = (
                 run_srs(
+                    factory=factory,
+                    version_id=version_id,
+                    defn=defn,
+                    user_inputs=user_inputs,
+                    ctx=ctx,
+                    deadline=deadline,
+                    based_on_version_id=based_on_version_id,
+                    instructions=instructions,
+                    revision_parts=parts_list,
+                )
+            )
+            inputs_meta = {**inputs_meta, **extra_meta}
+            if user_inputs:
+                inputs_meta["user_inputs"] = user_inputs
+            model_id = settings.GEMINI_MODEL
+        elif step_key == "frs":
+            from app.services.frs_generation import run_frs
+
+            revision_parts = existing_inputs.get("revision_parts")
+            parts_list = (
+                [str(p) for p in revision_parts]
+                if isinstance(revision_parts, list)
+                else None
+            )
+            with factory() as session:
+                version = session.get(StepVersion, version_id)
+                if version is None:
+                    return
+                ctx = _postprocess_context(
+                    session,
+                    version.project_id,
+                    defn,
+                    user_inputs=user_inputs,
+                    version_no=version.version_no,
+                )
+            stored, extra_meta, assembled_prompt, prompt_version, tokens_in, tokens_out, api_attempts = (
+                run_frs(
                     factory=factory,
                     version_id=version_id,
                     defn=defn,

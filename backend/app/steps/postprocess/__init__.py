@@ -46,6 +46,9 @@ class PostprocessContext:
     feature_list_content: dict | None = None
     estimate_content: dict | None = None
     estimate_user_inputs: dict = field(default_factory=dict)
+    srs_content: dict | None = None
+    sprint_plan_content: dict | None = None
+    frs_revision_parts: tuple[str, ...] = ()
 
 
 # Returns the stored model plus integer-only validation notes (never text).

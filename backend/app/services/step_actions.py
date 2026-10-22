@@ -35,7 +35,7 @@ from app.services.step_version_context import (
     step_has_in_flight,
     upstream_dependencies_still_approved,
 )
-from app.steps.definitions import get_step
+from app.steps.definitions import get_step, ordered_steps
 from app.steps.input_fields import (
     StepInputValidationError,
     user_inputs_audit_metadata,
@@ -177,6 +177,8 @@ def request_step_changes(
     if base.step_key == "srs" and revision_parts and not instructions:
         instructions = "Partial revision requested"
     if base.step_key == "sprint_plan" and revision_parts and not instructions:
+        instructions = "Partial revision requested"
+    if base.step_key == "frs" and revision_parts and not instructions:
         instructions = "Partial revision requested"
     if not instructions:
         raise HTTPException(
@@ -328,7 +330,75 @@ def approve_step_version(
         ip_address=audit_ip,
         user_agent=audit_ua,
     )
+
+    if version.step_key == "frs":
+        _complete_project_on_frs_approve(session, project, version, actor, audit_ip, audit_ua)
+
     session.commit()
     return get_step_version_detail(session, version.id)
+
+
+def _complete_project_on_frs_approve(
+    session: Session,
+    project: Project,
+    frs_version: StepVersion,
+    actor: User,
+    audit_ip: str | None,
+    audit_ua: str | None,
+) -> None:
+    from app.services.step_state import IN_FLIGHT_STATUSES
+
+    for step in ordered_steps():
+        row = session.scalar(
+            select(StepVersion)
+            .where(
+                StepVersion.project_id == project.id,
+                StepVersion.step_key == step.key,
+                StepVersion.status == "approved",
+            )
+            .order_by(StepVersion.version_no.desc())
+        )
+        if row is None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="All workflow steps must be approved before completing the project",
+            )
+        if row.status == "stale":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="An approved step is stale; regenerate upstream steps first",
+            )
+        inflight = session.scalar(
+            select(StepVersion.id).where(
+                StepVersion.project_id == project.id,
+                StepVersion.step_key == step.key,
+                StepVersion.status.in_(tuple(IN_FLIGHT_STATUSES)),
+            )
+        )
+        if inflight is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Generation is still in progress for a workflow step",
+            )
+
+    from datetime import UTC, datetime
+
+    project.status = "completed"
+    project.completed_at = datetime.now(UTC)
+    record_audit(
+        session,
+        action=AuditAction.PROJECT_COMPLETED,
+        actor=actor,
+        entity_type="project",
+        entity_id=project.id,
+        project_id=project.id,
+        metadata={
+            "project_id": str(project.id),
+            "frs_version_id": str(frs_version.id),
+            "step_count": len(tuple(ordered_steps())),
+        },
+        ip_address=audit_ip,
+        user_agent=audit_ua,
+    )
 
 

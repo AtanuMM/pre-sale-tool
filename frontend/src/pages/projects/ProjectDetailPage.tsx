@@ -20,6 +20,7 @@ import {
   deleteProject,
   createFollowUpInput,
   downloadProjectFile,
+  downloadProjectPackage,
   getProjectFileText,
   getProjectIntakeLimits,
   getProjectOverview,
@@ -60,6 +61,7 @@ import {
   PERMISSION_INPUT_ADD,
   PERMISSION_PROJECT_ARCHIVE,
   PERMISSION_PROJECT_DELETE,
+  PERMISSION_DOCUMENT_DOWNLOAD,
   PERMISSION_SETTINGS_MANAGE,
 } from '@/lib/permissions'
 import { timelineActionLabel } from '@/lib/timelineLabels'
@@ -353,6 +355,7 @@ export function ProjectDetailPage() {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [confirmSettings, setConfirmSettings] = useState(false)
   const [settingsDraft, setSettingsDraft] = useState<'inherit' | 'allow' | 'deny'>('inherit')
+  const [packageLoading, setPackageLoading] = useState(false)
 
   const overviewQuery = useQuery({
     queryKey: ['projects', projectId],
@@ -472,6 +475,9 @@ export function ProjectDetailPage() {
   const canArchive = hasPermission(PERMISSION_PROJECT_ARCHIVE)
   const canDelete = hasPermission(PERMISSION_PROJECT_DELETE)
   const canEditSettings = hasPermission(PERMISSION_SETTINGS_MANAGE)
+  const canDownloadPackage = hasPermission(PERMISSION_DOCUMENT_DOWNLOAD)
+  const hasApprovedStep =
+    stepsQuery.data?.steps.some((step) => step.status === 'approved') ?? false
 
   const applySettings = () => {
     const next =
@@ -482,6 +488,13 @@ export function ProjectDetailPage() {
 
   return (
     <div className="space-y-6">
+      {overview.project.status === 'completed' ? (
+        <div className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-sm text-foreground">
+          This project is completed. Workflow documents are read-only. Archive and restore still
+          work; restoring an archived completed project returns to completed status.
+        </div>
+      ) : null}
+
       <PageHeader
         title={overview.project.name}
         description={overview.project.client_name}
@@ -506,9 +519,48 @@ export function ProjectDetailPage() {
                 Delete
               </Button>
             ) : null}
+            {canDownloadPackage && hasApprovedStep ? (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={packageLoading}
+                onClick={() => {
+                  void (async () => {
+                    setPackageLoading(true)
+                    try {
+                      const { blob, filename } = await downloadProjectPackage(
+                        projectId!,
+                        'project-package.zip',
+                      )
+                      triggerBrowserDownload(blob, filename)
+                      toast.success('Project package downloaded')
+                    } catch (err) {
+                      toast.error(
+                        err instanceof ApiError ? err.displayMessage() : 'Package download failed',
+                      )
+                    } finally {
+                      setPackageLoading(false)
+                    }
+                  })()
+                }}
+              >
+                {packageLoading ? (
+                  <Loader2Icon className="size-4 animate-spin" />
+                ) : (
+                  <DownloadIcon className="size-4" />
+                )}
+                Download project package
+              </Button>
+            ) : null}
           </div>
         }
       />
+      {canDownloadPackage && hasApprovedStep ? (
+        <p className="text-xs text-muted-foreground">
+          The project package includes approved documents only (draft and stale versions are
+          excluded).
+        </p>
+      ) : null}
 
       <div className="flex flex-wrap gap-2 border-b border-border pb-2">
         {(['overview', 'workflow', 'timeline', 'settings'] as TabId[]).map((id) => (

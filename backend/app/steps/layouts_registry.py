@@ -622,6 +622,64 @@ SRS_LAYOUT: tuple[SectionLayoutSpec, ...] = (
     ),
 )
 
+FRS_LAYOUT: tuple[SectionLayoutSpec, ...] = (
+    SectionLayoutSpec(
+        "health",
+        "Document health",
+        SectionKind.HEALTH_PANEL,
+        source="viewer",
+    ),
+    SectionLayoutSpec(
+        "traceability",
+        "Traceability",
+        SectionKind.COMPUTED_TABLE,
+        source="assembled.traceability_rows",
+        columns=(
+            LayoutColumn("srs_id", "SRS requirement"),
+            LayoutColumn("feature_id", "Feature"),
+            LayoutColumn("fs_id", "FS spec"),
+            LayoutColumn("story_ids", "Stories"),
+        ),
+    ),
+    SectionLayoutSpec(
+        "feature_specs",
+        "Functional specifications",
+        SectionKind.COMPUTED_TABLE,
+        source="specifications",
+        columns=(
+            LayoutColumn("id", "FS ID"),
+            LayoutColumn("module", "Module"),
+            LayoutColumn("title", "Feature"),
+            LayoutColumn("priority", "Priority"),
+            LayoutColumn("phase", "Phase"),
+        ),
+        filter_fields=("module", "priority", "phase"),
+    ),
+    SectionLayoutSpec(
+        "permission_matrix",
+        "Permission matrix",
+        SectionKind.COMPUTED_TABLE,
+        source="assembled.permission_matrix",
+        columns=(
+            LayoutColumn("role", "Role"),
+            LayoutColumn("feature_id", "Feature"),
+            LayoutColumn("actions", "Actions"),
+        ),
+        filter_fields=("role", "feature_id"),
+    ),
+    SectionLayoutSpec(
+        "open_issues",
+        "Open issues",
+        SectionKind.COMPUTED_TABLE,
+        source="assembled.open_issues",
+        columns=(
+            LayoutColumn("ref", "Ref"),
+            LayoutColumn("title", "Title"),
+            LayoutColumn("question", "Question"),
+        ),
+    ),
+)
+
 SPRINT_PLAN_LAYOUT: tuple[SectionLayoutSpec, ...] = (
     SectionLayoutSpec(
         "health",

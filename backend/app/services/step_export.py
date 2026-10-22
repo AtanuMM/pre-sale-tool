@@ -134,6 +134,10 @@ def build_step_version_docx(
         from app.documents.sprint_plan_docx import render_sprint_plan_docx
 
         docx_bytes = render_sprint_plan_docx(content, meta)
+    elif version.step_key == "frs":
+        from app.documents.frs_docx import render_frs_docx
+
+        docx_bytes = render_frs_docx(content, meta)
     else:
         docx_bytes = render_step_docx(version.step_key, content, meta)
     filename = build_step_export_filename(
@@ -246,6 +250,10 @@ def build_step_version_export(
             from app.documents.sprint_plan_xlsx import build_sprint_plan_xlsx
 
             data = build_sprint_plan_xlsx(content, meta)
+        elif version.step_key == "frs":
+            from app.documents.frs_xlsx import build_frs_xlsx
+
+            data = build_frs_xlsx(content, meta)
         else:
             data = build_estimate_xlsx(content, meta)
         return (
@@ -265,6 +273,10 @@ def build_step_version_export(
             show_h = isinstance(user, dict) and user.get("show_effort_hours") == "yes"
             show_p = isinstance(user, dict) and user.get("show_story_points") == "yes"
             data = build_sprint_plan_csv(content, show_h, show_p)
+        elif version.step_key == "frs":
+            from app.documents.frs_csv import build_frs_csv
+
+            data = build_frs_csv(content)
         else:
             data = build_estimate_csv(content)
         return data, filename, "text/csv; charset=utf-8"

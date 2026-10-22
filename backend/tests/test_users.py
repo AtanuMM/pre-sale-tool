@@ -274,3 +274,42 @@ def test_reset_password_revokes_and_audits(client: TestClient, seeded_session) -
     assert old_login.status_code == 401
     new_login = _login(client, "reset@example.test", "new-reset-pass1")
     assert new_login.status_code == 200
+
+
+def test_delete_user_removes_account(client: TestClient, seeded_session) -> None:
+    factory, settings = seeded_session
+    token = _admin_token(client, settings)
+    viewer_id = _viewer_role_id(client, token)
+    created = client.post(
+        "/users",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "email": "delete-me@example.test",
+            "full_name": "Delete Me",
+            "password": "delete-pass-12",
+            "role_ids": [viewer_id],
+        },
+    )
+    user_id = created.json()["id"]
+    resp = client.delete(
+        f"/users/{user_id}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 204
+    with factory() as session:
+        assert session.get(User, uuid.UUID(user_id)) is None
+        audits = session.scalars(
+            select(AuditLog).where(AuditLog.action == "user.deleted")
+        ).all()
+        assert len(audits) == 1
+
+
+def test_cannot_delete_self(client: TestClient, seeded_session) -> None:
+    settings = seeded_session[1]
+    token = _admin_token(client, settings)
+    me = client.get("/auth/me", headers={"Authorization": f"Bearer {token}"})
+    resp = client.delete(
+        f"/users/{me.json()['id']}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 409
